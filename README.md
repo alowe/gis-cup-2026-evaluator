@@ -10,6 +10,7 @@ pnpm test
 pnpm build
 pnpm dev
 pnpm benchmark:sample
+pnpm benchmark:stress
 ```
 
 The authoritative spatial tolerance is `0.001` meters. It is applied through the ArcGIS spatial reference and geometry operators as numerical/topological slack; it is not interpreted as an exact maximum-penetration distance. Dependencies are pinned exactly in `package.json` and `pnpm-lock.yaml` so the resulting geometry behavior can be reproduced.
@@ -35,5 +36,7 @@ Collinear radial target edges, target footprints within the spatial tolerance of
 Normal scoring removes a verified building from subsequent antenna work once accumulated visible length reaches its threshold and reports lower-bound coverage. Full diagnostic mode processes every antenna and reports complete coverage. Identical antenna/threshold configurations share visibility results across solution blocks. The worker emits per-antenna sweep progress followed by per-claim result progress, yields periodically within large sweeps for responsive cancellation, and exports a versioned JSON report containing input SHA-256 hashes, pinned geometry versions, detailed counts, verified IDs, coverage results, and structured warnings.
 
 The sample benchmark loads `datasets/GIS-cup-sample-dataset.geojson` by default and reports file, geometry, time, heap, and one-antenna radial-sweep statistics. `BENCHMARK_CLAIMS` controls how many nearby buildings have their visible intervals recorded; all dataset edges participate as obstacles regardless. Override the input with `SAMPLE_DATASET` when testing larger data.
+
+The stress benchmark uses 50 deterministic boundary antennas distributed through the sample dataset, claims every building, and enables full diagnostic coverage so all 50 antenna sweeps run. It is intentionally separate as `pnpm benchmark:stress` because it takes much longer and can use substantially more memory than the normal test suite.
 
 Ready-to-load browser fixtures are under `datasets/ui-smoke`, with documented expected scores for passing, failing, snapping, duplicate, unknown-ID, truncation, and multi-configuration cases. `datasets/GIS-cup-sample-submission.txt` provides a quick submission for the larger committed sample dataset.

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "benchmark:sample": "vitest run --config vitest.benchmark.config.ts --reporter=verbose",
+    "benchmark:sample": "vitest run --config vitest.benchmark.config.ts benchmarks/sample-dataset.test.ts --reporter=verbose",
+    "benchmark:stress": "vitest run --config vitest.benchmark.config.ts benchmarks/sample-full-evaluation.test.ts --reporter=verbose",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",
