@@ -37,11 +37,13 @@ test("reports sample dataset loading and visibility baselines", () => {
     snapped: false,
   };
   const targets = nearestBuildings(dataset.buildings, host, claimCount);
+  const coverages: number[] = [];
   const visibilityStarted = performance.now();
   for (const target of targets) {
-    computeBuildingVisibility(dataset, target.id, [antenna], {
+    const visibility = computeBuildingVisibility(dataset, target.id, [antenna], {
       requiredVisibleLengthMeters: target.perimeterMeters * 0.5,
     });
+    coverages.push(visibility.coverage);
   }
   const visibilityMilliseconds = performance.now() - visibilityStarted;
 
@@ -57,6 +59,8 @@ test("reports sample dataset loading and visibility baselines", () => {
     visibilityClaimCount: targets.length,
     visibilityMilliseconds: round(visibilityMilliseconds),
     averageVisibilityMilliseconds: round(visibilityMilliseconds / Math.max(1, targets.length)),
+    firstBuildingId: targets[0]?.id,
+    firstBuildingCoverage: coverages[0] === undefined ? undefined : round(coverages[0]),
   };
 
   console.log(`\nSAMPLE_BENCHMARK ${JSON.stringify(result, null, 2)}`);
