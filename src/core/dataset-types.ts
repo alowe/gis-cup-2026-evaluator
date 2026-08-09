@@ -24,6 +24,27 @@ export interface BoundaryIndexItem {
   readonly edgeIndex: number;
 }
 
+export interface BuildingIndexItem {
+  readonly minX: number;
+  readonly minY: number;
+  readonly maxX: number;
+  readonly maxY: number;
+  readonly buildingId: string;
+  readonly buildingInputIndex: number;
+}
+
+export interface VertexIndexItem {
+  readonly minX: number;
+  readonly minY: number;
+  readonly maxX: number;
+  readonly maxY: number;
+  readonly x: number;
+  readonly y: number;
+  readonly buildingId: string;
+  readonly buildingInputIndex: number;
+  readonly vertexIndex: number;
+}
+
 export interface PreparedBuilding {
   readonly id: string;
   readonly inputIndex: number;
@@ -40,7 +61,9 @@ export interface BuildingDataset {
   readonly spatialReferenceWkid: number;
   readonly buildings: readonly PreparedBuilding[];
   readonly buildingById: ReadonlyMap<string, PreparedBuilding>;
+  readonly buildingIndex: RBush<BuildingIndexItem>;
   readonly boundaryIndex: RBush<BoundaryIndexItem>;
+  readonly vertexIndex: RBush<VertexIndexItem>;
   readonly edgeCount: number;
   readonly vertexCount: number;
 }

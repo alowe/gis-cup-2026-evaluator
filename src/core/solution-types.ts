@@ -12,12 +12,15 @@ export type SolutionWarningCode =
   | "ANTENNA_SNAPPED"
   | "DUPLICATE_ANTENNA"
   | "UNKNOWN_BUILDING_ID"
-  | "DUPLICATE_BUILDING_ID";
+  | "DUPLICATE_BUILDING_ID"
+  | "CLAIM_BELOW_THRESHOLD"
+  | "NUMERICAL_FAILURE";
 
 export interface SolutionWarning {
   readonly code: SolutionWarningCode;
   readonly subproblemIndex: number;
   readonly entryIndex?: number;
+  readonly buildingId?: string;
   readonly message: string;
   readonly action: string;
 }

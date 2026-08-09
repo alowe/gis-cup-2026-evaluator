@@ -74,5 +74,6 @@ export interface SubproblemValidationSummary {
   readonly uniqueAntennaCount: number;
   readonly reportedClaimCount: number;
   readonly uniqueKnownClaimCount: number;
+  readonly verifiedServiceScore: number;
   readonly warningCount: number;
 }

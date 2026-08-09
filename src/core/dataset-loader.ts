@@ -9,9 +9,11 @@ import { DatasetValidationError } from "./dataset-errors.js";
 import type {
   BuildingDataset,
   BuildingEdge,
+  BuildingIndexItem,
   BoundaryIndexItem,
   Coordinate,
   PreparedBuilding,
+  VertexIndexItem,
 } from "./dataset-types.js";
 import { createMeterSpatialReference } from "./spatial-reference.js";
 
@@ -59,7 +61,9 @@ export function loadBuildingDataset(input: unknown): BuildingDataset {
 
   const buildings: PreparedBuilding[] = [];
   const buildingById = new Map<string, PreparedBuilding>();
+  const buildingItems: BuildingIndexItem[] = [];
   const boundaryItems: BoundaryIndexItem[] = [];
+  const vertexItems: VertexIndexItem[] = [];
   let edgeCount = 0;
   let vertexCount = 0;
 
@@ -78,20 +82,40 @@ export function loadBuildingDataset(input: unknown): BuildingDataset {
     buildingById.set(building.id, building);
     edgeCount += building.edges.length;
     vertexCount += building.vertices.length;
+    buildingItems.push(createBuildingIndexItem(building));
     boundaryItems.push(...building.edges.map((edge) => createBoundaryIndexItem(building, edge)));
+    vertexItems.push(...building.vertices.map((vertex, vertexIndex) =>
+      createVertexIndexItem(building, vertex, vertexIndex)));
   }
 
+  const buildingIndex = new RBush<BuildingIndexItem>();
+  buildingIndex.load(buildingItems);
   const boundaryIndex = new RBush<BoundaryIndexItem>();
   boundaryIndex.load(boundaryItems);
+  const vertexIndex = new RBush<VertexIndexItem>();
+  vertexIndex.load(vertexItems);
 
   return {
     spatialReference,
     spatialReferenceWkid,
     buildings,
     buildingById,
+    buildingIndex,
     boundaryIndex,
+    vertexIndex,
     edgeCount,
     vertexCount,
+  };
+}
+
+function createBuildingIndexItem(building: PreparedBuilding): BuildingIndexItem {
+  return {
+    minX: building.extent.xmin,
+    minY: building.extent.ymin,
+    maxX: building.extent.xmax,
+    maxY: building.extent.ymax,
+    buildingId: building.id,
+    buildingInputIndex: building.inputIndex,
   };
 }
 
@@ -107,6 +131,24 @@ function createBoundaryIndexItem(
     buildingId: building.id,
     buildingInputIndex: building.inputIndex,
     edgeIndex: edge.edgeIndex,
+  };
+}
+
+function createVertexIndexItem(
+  building: PreparedBuilding,
+  [x, y]: Coordinate,
+  vertexIndex: number,
+): VertexIndexItem {
+  return {
+    minX: x,
+    minY: y,
+    maxX: x,
+    maxY: y,
+    x,
+    y,
+    buildingId: building.id,
+    buildingInputIndex: building.inputIndex,
+    vertexIndex,
   };
 }
 

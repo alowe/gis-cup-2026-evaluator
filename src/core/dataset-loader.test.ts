@@ -18,6 +18,8 @@ describe("building dataset loader", () => {
     expect(dataset.edgeCount).toBe(12);
     expect(dataset.vertexCount).toBe(12);
     expect(dataset.boundaryIndex.all()).toHaveLength(12);
+    expect(dataset.buildingIndex.all()).toHaveLength(3);
+    expect(dataset.vertexIndex.all()).toHaveLength(12);
     expect(dataset.buildings.map((building) => building.perimeterMeters)).toEqual([4, 4, 4]);
     expect(dataset.buildings.every((building) => building.edges.length === 4)).toBe(true);
   });

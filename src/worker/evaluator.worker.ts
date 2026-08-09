@@ -5,6 +5,7 @@ import { SPATIAL_TOLERANCE_METERS, TEST_SPATIAL_REFERENCE_WKID } from "../core/c
 import { DatasetValidationError } from "../core/dataset-errors.js";
 import { parseBuildingDatasetText } from "../core/dataset-loader.js";
 import type { BuildingDataset } from "../core/dataset-types.js";
+import { evaluateValidatedSubproblem } from "../core/evaluation-engine.js";
 import { parseSolutionText } from "../core/solution-parser.js";
 import { createMeterSpatialReference } from "../core/spatial-reference.js";
 import { validateSubproblemInput } from "../core/submission-validator.js";
@@ -84,27 +85,29 @@ async function loadSolution(requestId: number, file: File): Promise<void> {
   try {
     const parsed = parseSolutionText(await file.text());
     const validated = parsed.subproblems.map((subproblem) =>
-      validateSubproblemInput(subproblem, dataset),
-    );
+      validateSubproblemInput(subproblem, dataset));
+    const evaluated = validated.map((subproblem) =>
+      evaluateValidatedSubproblem(dataset, subproblem));
     const response: EvaluatorWorkerResponse = {
       type: "solution-validated",
       requestId,
       summary: {
         fileName: file.name,
         fileSizeBytes: file.size,
-        warningCount: validated.reduce((total, subproblem) => total + subproblem.warnings.length, 0),
-        subproblems: validated.map((subproblem) => ({
-          index: subproblem.source.index,
-          complete: subproblem.source.complete,
-          parametersValid: subproblem.source.parametersValid,
-          tau: subproblem.source.tau,
-          k: subproblem.source.k,
-          reportedAntennaCount: subproblem.source.antennas.length,
-          retainedAntennaCount: subproblem.source.retainedAntennas.length,
-          validAntennaCount: subproblem.validAntennas.length,
-          uniqueAntennaCount: subproblem.uniqueAntennas.length,
-          reportedClaimCount: subproblem.claims.reportedIds.length,
-          uniqueKnownClaimCount: subproblem.claims.uniqueKnownIds.length,
+        warningCount: evaluated.reduce((total, subproblem) => total + subproblem.warnings.length, 0),
+        subproblems: evaluated.map((subproblem) => ({
+          index: subproblem.input.source.index,
+          complete: subproblem.input.source.complete,
+          parametersValid: subproblem.input.source.parametersValid,
+          tau: subproblem.input.source.tau,
+          k: subproblem.input.source.k,
+          reportedAntennaCount: subproblem.input.source.antennas.length,
+          retainedAntennaCount: subproblem.input.source.retainedAntennas.length,
+          validAntennaCount: subproblem.input.validAntennas.length,
+          uniqueAntennaCount: subproblem.input.uniqueAntennas.length,
+          reportedClaimCount: subproblem.input.claims.reportedIds.length,
+          uniqueKnownClaimCount: subproblem.input.claims.uniqueKnownIds.length,
+          verifiedServiceScore: subproblem.verifiedServiceScore,
           warningCount: subproblem.warnings.length,
         })),
       },

@@ -156,7 +156,7 @@ function renderSolutionSummary(
 
   const table = document.createElement("table");
   const header = document.createElement("thead");
-  header.innerHTML = "<tr><th>Configuration</th><th>τ</th><th>k</th><th>Antennas</th><th>Claims</th><th>Warnings</th></tr>";
+  header.innerHTML = "<tr><th>Configuration</th><th>τ</th><th>k</th><th>Antennas</th><th>Claims</th><th>Score</th><th>Warnings</th></tr>";
   table.append(header);
 
   const body = document.createElement("tbody");
@@ -168,6 +168,7 @@ function renderSolutionSummary(
       subproblem.k?.toString() ?? "Invalid",
       `${subproblem.validAntennaCount}/${subproblem.reportedAntennaCount} valid`,
       `${subproblem.uniqueKnownClaimCount}/${subproblem.reportedClaimCount} known`,
+      String(subproblem.verifiedServiceScore),
       String(subproblem.warningCount),
     ];
 
