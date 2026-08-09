@@ -196,6 +196,57 @@ tbody tr:last-child td {
   border-bottom: 0;
 }
 
+.warning-details {
+  border-top: 1px solid #d8e2e4;
+}
+
+.warning-details summary {
+  padding: 0.85rem 1rem;
+  color: #7a4c16;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.warning-details summary:hover {
+  background: #fffaf2;
+}
+
+.warning-list {
+  padding: 0 1rem 1rem;
+}
+
+.warning-group h3 {
+  margin: 0.75rem 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.warning-item {
+  padding: 0.75rem;
+  border-left: 3px solid #d49a4a;
+  background: #fffaf2;
+}
+
+.warning-item + .warning-item {
+  margin-top: 0.5rem;
+}
+
+.warning-item p {
+  margin: 0.35rem 0 0;
+  line-height: 1.45;
+}
+
+.warning-code {
+  color: #7a4c16;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.warning-action {
+  color: #5b6974;
+  font-size: 0.85rem;
+}
+
 @media (max-width: 42rem) {
   .shell {
     width: min(100% - 2rem, 52rem);

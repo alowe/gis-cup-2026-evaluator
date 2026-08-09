@@ -114,7 +114,7 @@ evaluatorWorker.addEventListener(
         latestReport = event.data.report;
         status.dataset.state = "success";
         status.textContent = `${event.data.summary.fileName}: ${event.data.summary.subproblems.length} configuration(s), ${event.data.summary.warningCount} warning(s)`;
-        renderSolutionSummary(results, event.data.summary.subproblems);
+        renderSolutionSummary(results, event.data.summary.subproblems, event.data.report);
         break;
       case "solution-error":
         if (event.data.requestId !== activeSolutionRequestId) return;
@@ -215,6 +215,7 @@ exportButton.addEventListener("click", () => {
 function renderSolutionSummary(
   container: HTMLElement,
   subproblems: readonly SubproblemValidationSummary[],
+  report: EvaluationReport,
 ): void {
   container.replaceChildren();
 
@@ -231,7 +232,7 @@ function renderSolutionSummary(
       subproblem.tau?.toString() ?? "Invalid",
       subproblem.k?.toString() ?? "Invalid",
       `${subproblem.validAntennaCount}/${subproblem.reportedAntennaCount} valid`,
-      `${subproblem.uniqueKnownClaimCount}/${subproblem.reportedClaimCount} known`,
+      `${subproblem.verifiedServiceScore}/${subproblem.reportedClaimCount} valid`,
       String(subproblem.verifiedServiceScore),
       String(subproblem.warningCount),
     ];
@@ -246,7 +247,60 @@ function renderSolutionSummary(
 
   table.append(body);
   container.append(table);
+  renderWarningDetails(container, report);
   container.hidden = false;
+}
+
+function renderWarningDetails(container: HTMLElement, report: EvaluationReport): void {
+  const warningCount = report.subproblems.reduce(
+    (total, subproblem) => total + subproblem.warnings.length,
+    0,
+  );
+  if (warningCount === 0) return;
+
+  const details = document.createElement("details");
+  details.className = "warning-details";
+  const summary = document.createElement("summary");
+  summary.textContent = `View ${warningCount} warning${warningCount === 1 ? "" : "s"}`;
+  details.append(summary);
+
+  const warningList = document.createElement("div");
+  warningList.className = "warning-list";
+  for (const subproblem of report.subproblems) {
+    if (subproblem.warnings.length === 0) continue;
+
+    const group = document.createElement("section");
+    group.className = "warning-group";
+    const heading = document.createElement("h3");
+    heading.textContent = `Configuration ${subproblem.index}`;
+    group.append(heading);
+
+    for (const warning of subproblem.warnings) {
+      const item = document.createElement("article");
+      item.className = "warning-item";
+      const title = document.createElement("div");
+      title.className = "warning-code";
+      title.textContent = warningContext(warning);
+      const message = document.createElement("p");
+      message.textContent = warning.message;
+      const action = document.createElement("p");
+      action.className = "warning-action";
+      action.textContent = `Action: ${warning.action}`;
+      item.append(title, message, action);
+      group.append(item);
+    }
+    warningList.append(group);
+  }
+
+  details.append(warningList);
+  container.append(details);
+}
+
+function warningContext(warning: EvaluationReport["subproblems"][number]["warnings"][number]): string {
+  const context: string[] = [warning.code];
+  if (warning.buildingId !== undefined) context.push(`building ${warning.buildingId}`);
+  if (warning.entryIndex !== undefined) context.push(`entry ${warning.entryIndex}`);
+  return context.join(" · ");
 }
 
 function stripFileExtension(fileName: string): string {
