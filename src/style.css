@@ -39,6 +39,76 @@ h1 {
   line-height: 1.65;
 }
 
+.panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  margin-top: 2.5rem;
+  padding: 1.5rem;
+  border: 1px solid #d8e2e4;
+  border-radius: 1rem;
+  background: white;
+}
+
+.step {
+  margin: 0 0 0.35rem;
+  color: #237565;
+  font-size: 0.75rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.hint {
+  margin: 0.4rem 0 0;
+  color: #697681;
+  font-size: 0.9rem;
+}
+
+.file-picker {
+  flex: none;
+  cursor: pointer;
+}
+
+.file-picker span {
+  display: block;
+  padding: 0.7rem 1rem;
+  border-radius: 0.6rem;
+  background: #176757;
+  color: white;
+  font-weight: 700;
+}
+
+.file-picker:hover span {
+  background: #105245;
+}
+
+.file-picker:has(input:focus-visible) span {
+  outline: 3px solid #80bfb2;
+  outline-offset: 3px;
+}
+
+.file-picker:has(input:disabled) {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.file-picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
 .status {
   margin-top: 2rem;
   padding: 1rem 1.25rem;
@@ -51,4 +121,21 @@ h1 {
 .status[data-state="error"] {
   border-color: #d79a94;
   color: #8b2f26;
+}
+
+.status[data-state="success"] {
+  border-color: #9dcbbd;
+  color: #175e50;
+}
+
+@media (max-width: 42rem) {
+  .shell {
+    width: min(100% - 2rem, 52rem);
+    margin-block: 2.5rem;
+  }
+
+  .panel {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }

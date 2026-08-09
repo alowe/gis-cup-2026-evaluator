@@ -20,3 +20,5 @@ The authoritative spatial tolerance is `0.001` meters. It is applied through the
 - `src/main.ts`: browser UI
 
 The initial test milestone characterizes ArcGIS line-of-sight behavior near the specified spatial tolerance, including boundary overlap, vertex contact, small nominal penetrations, and clear interior crossings.
+
+The dataset loader accepts a named EPSG CRS, requires projected meter units, canonicalizes building IDs, and rejects unsupported geometry, holes, malformed coordinates, open or self-intersecting rings, and duplicate IDs. Valid polygons are converted to ArcGIS geometries and preprocessed into boundaries, edges, vertices, extents, and planar perimeters inside the worker.

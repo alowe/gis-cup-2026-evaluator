@@ -1,0 +1,36 @@
+{
+  "type": "FeatureCollection",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "urn:ogc:def:crs:EPSG::32611"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "id": 1 },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[500000, 3700000], [500001, 3700000], [500001, 3700001], [500000, 3700001], [500000, 3700000]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": 2 },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[500002, 3700000], [500003, 3700000], [500003, 3700001], [500002, 3700001], [500002, 3700000]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": " third " },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[500004, 3700000], [500005, 3700000], [500005, 3700001], [500004, 3700001], [500004, 3700000]]]
+      }
+    }
+  ]
+}
+
