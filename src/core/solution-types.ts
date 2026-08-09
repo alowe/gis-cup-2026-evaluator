@@ -1,0 +1,49 @@
+import type { Coordinate } from "./dataset-types.js";
+
+export type SolutionWarningCode =
+  | "INCOMPLETE_SUBPROBLEM"
+  | "INVALID_TAU"
+  | "INVALID_K"
+  | "EXTRA_ANTENNAS"
+  | "MALFORMED_ANTENNA"
+  | "NONFINITE_ANTENNA"
+  | "EMPTY_BUILDING_ID";
+
+export interface SolutionWarning {
+  readonly code: SolutionWarningCode;
+  readonly subproblemIndex: number;
+  readonly entryIndex?: number;
+  readonly message: string;
+  readonly action: string;
+}
+
+export type ParsedAntennaEntry =
+  | {
+      readonly inputIndex: number;
+      readonly raw: string;
+      readonly status: "valid";
+      readonly coordinate: Coordinate;
+    }
+  | {
+      readonly inputIndex: number;
+      readonly raw: string;
+      readonly status: "malformed" | "nonfinite";
+    };
+
+export interface ParsedSubproblem {
+  readonly index: number;
+  readonly complete: boolean;
+  readonly tau?: number;
+  readonly k?: number;
+  readonly parametersValid: boolean;
+  readonly antennas: readonly ParsedAntennaEntry[];
+  readonly retainedAntennas: readonly ParsedAntennaEntry[];
+  readonly claimedBuildingIds: readonly string[];
+  readonly warnings: readonly SolutionWarning[];
+}
+
+export interface ParsedSolution {
+  readonly subproblems: readonly ParsedSubproblem[];
+  readonly warnings: readonly SolutionWarning[];
+}
+
