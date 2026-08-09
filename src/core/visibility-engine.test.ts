@@ -5,6 +5,7 @@ import type { BuildingDataset, Coordinate } from "./dataset-types.js";
 import type { ValidatedAntenna } from "./submission-types.js";
 import {
   computeBuildingVisibility,
+  computeBuildingVisibilityAsync,
   computeVisibleIntervalsForEdge,
   generateCriticalParametersForEdge,
   isSightLineBlocked,
@@ -143,6 +144,19 @@ describe("visibility engine", () => {
       bottomEdge,
       [500000, 3700000],
     )).toEqual([]);
+  });
+
+  it("cooperatively cancels within one building with many antennas", async () => {
+    const dataset = datasetFromFeatures([square("target", 500000, 3700000, 1, 1)]);
+    const antennas = Array.from({ length: 100 }, (_, index) =>
+      antenna([500000 + index / 100, 3700000], "target", index));
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(new DOMException("Test cancellation.", "AbortError")), 0);
+
+    await expect(computeBuildingVisibilityAsync(dataset, "target", antennas, {
+      fullDiagnosticCoverage: true,
+      signal: controller.signal,
+    })).rejects.toMatchObject({ name: "AbortError" });
   });
 });
 

@@ -1,6 +1,3 @@
-import Point from "@arcgis/core/geometry/Point.js";
-import * as proximityOperator from "@arcgis/core/geometry/operators/proximityOperator.js";
-
 import {
   DISTANCE_TIE_TOLERANCE_METERS,
   SPATIAL_TOLERANCE_METERS,
@@ -111,25 +108,20 @@ function snapAntenna(
     maxX: x + SPATIAL_TOLERANCE_METERS,
     maxY: y + SPATIAL_TOLERANCE_METERS,
   });
-  const candidateIds = new Set(boundaryItems.map((item) => item.buildingId));
-  const point = new Point({ x, y, spatialReference: dataset.spatialReference });
   let best: SnapCandidate | undefined;
 
-  for (const buildingId of candidateIds) {
-    const building = dataset.buildingById.get(buildingId);
-    if (building === undefined) continue;
-
-    const result = proximityOperator.getNearestCoordinate(building.polygon, point, {
-      unit: "meters",
-      testPolygonInterior: false,
-    });
-
-    if (!Number.isFinite(result.distance) || result.distance > SPATIAL_TOLERANCE_METERS) continue;
+  for (const item of boundaryItems) {
+    const building = dataset.buildings[item.buildingInputIndex];
+    const edge = building?.edges[item.edgeIndex];
+    if (building === undefined || edge === undefined) continue;
+    const coordinate = nearestPointOnSegment(entry.coordinate, edge.start, edge.end);
+    const distanceMeters = Math.hypot(coordinate[0] - x, coordinate[1] - y);
+    if (distanceMeters > SPATIAL_TOLERANCE_METERS) continue;
 
     const candidate: SnapCandidate = {
       building,
-      coordinate: [result.coordinate.x, result.coordinate.y],
-      distanceMeters: result.distance,
+      coordinate,
+      distanceMeters,
     };
 
     if (best === undefined || compareSnapCandidates(candidate, best) < 0) {
@@ -138,6 +130,17 @@ function snapAntenna(
   }
 
   return best;
+}
+
+function nearestPointOnSegment(point: Coordinate, start: Coordinate, end: Coordinate): Coordinate {
+  const dx = end[0] - start[0];
+  const dy = end[1] - start[1];
+  const squaredLength = dx * dx + dy * dy;
+  if (squaredLength === 0) return start;
+  const parameter = Math.min(1, Math.max(0,
+    ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / squaredLength,
+  ));
+  return [start[0] + parameter * dx, start[1] + parameter * dy];
 }
 
 function compareSnapCandidates(left: SnapCandidate, right: SnapCandidate): number {
@@ -204,4 +207,3 @@ function coordinatesEqual(left: Coordinate, right: Coordinate): boolean {
 function makeCoordinateKey([x, y]: Coordinate): string {
   return `${Object.is(x, -0) ? 0 : x},${Object.is(y, -0) ? 0 : y}`;
 }
-

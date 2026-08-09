@@ -6,7 +6,10 @@ import type {
 } from "./evaluation-types.js";
 import type { SolutionWarning } from "./solution-types.js";
 import type { ValidatedSubproblemInput } from "./submission-types.js";
-import { computeBuildingVisibility } from "./visibility-engine.js";
+import {
+  computeBuildingVisibility,
+  computeBuildingVisibilityAsync,
+} from "./visibility-engine.js";
 
 export function evaluateValidatedSubproblem(
   dataset: BuildingDataset,
@@ -114,22 +117,52 @@ export async function evaluateValidatedSubproblemAsync(
     await yieldToWorkerEventLoop();
     throwIfAborted(options.signal);
 
-    const singleClaimInput: ValidatedSubproblemInput = {
-      ...input,
-      claims: {
-        ...input.claims,
-        uniqueKnownIds: [buildingId],
-      },
-      warnings: [],
-    };
-    const singleResult = evaluateValidatedSubproblem(dataset, singleClaimInput, {
-      fullDiagnosticCoverage: options.fullDiagnosticCoverage,
-      signal: options.signal,
-      onBuildingEvaluation: options.onBuildingEvaluation,
-    });
-    buildingResults.push(...singleResult.buildingResults);
-    verifiedBuildingIds.push(...singleResult.verifiedBuildingIds);
-    warnings.push(...singleResult.warnings);
+    options.onBuildingEvaluation?.(buildingId);
+    try {
+      const building = dataset.buildingById.get(buildingId);
+      if (building === undefined) throw new Error("Validated building is missing from the dataset.");
+      const requiredVisibleLengthMeters = input.source.tau * building.perimeterMeters;
+      const configurationCache = getConfigurationCache(input, options);
+      let visibility = configurationCache?.get(buildingId);
+      if (visibility === undefined) {
+        visibility = await computeBuildingVisibilityAsync(dataset, buildingId, input.uniqueAntennas, {
+          requiredVisibleLengthMeters,
+          fullDiagnosticCoverage: options.fullDiagnosticCoverage,
+          signal: options.signal,
+        });
+        configurationCache?.set(buildingId, visibility);
+      }
+      const verified = visibility.visibleLengthMeters >= requiredVisibleLengthMeters;
+      buildingResults.push({
+        buildingId,
+        verified,
+        coverageKind: visibility.coverageKind,
+        coverage: visibility.coverage,
+        visibleLengthMeters: visibility.visibleLengthMeters,
+        requiredVisibleLengthMeters,
+        visibility,
+      });
+      if (verified) {
+        verifiedBuildingIds.push(buildingId);
+      } else {
+        warnings.push({
+          code: "CLAIM_BELOW_THRESHOLD",
+          subproblemIndex: input.source.index,
+          buildingId,
+          message: `Claimed building ${JSON.stringify(buildingId)} has coverage ${visibility.coverage}, below tau=${input.source.tau}.`,
+          action: "Exclude this building from the verified service score.",
+        });
+      }
+    } catch (error: unknown) {
+      if (isAbortError(error)) throw error;
+      warnings.push({
+        code: "NUMERICAL_FAILURE",
+        subproblemIndex: input.source.index,
+        buildingId,
+        message: `Building ${JSON.stringify(buildingId)} could not be evaluated: ${error instanceof Error ? error.message : "unknown geometry failure"}`,
+        action: "Exclude this building from the verified service score.",
+      });
+    }
     options.onProgress?.({
       subproblemIndex: input.source.index,
       buildingId,
@@ -145,6 +178,25 @@ export async function evaluateValidatedSubproblemAsync(
     verifiedServiceScore: verifiedBuildingIds.length,
     warnings,
   };
+}
+
+function getConfigurationCache(
+  input: ValidatedSubproblemInput,
+  options: EvaluationOptions,
+): Map<string, EvaluatedSubproblem["buildingResults"][number]["visibility"]> | undefined {
+  const cache = options.visibilityCache;
+  if (cache === undefined) return undefined;
+  const thresholdKey = options.fullDiagnosticCoverage ? "full" : `tau:${input.source.tau}`;
+  const antennaKey = input.uniqueAntennas
+    .map((antenna) => `${antenna.evaluatedCoordinate[0]},${antenna.evaluatedCoordinate[1]}`)
+    .join(";");
+  const key = `${thresholdKey}|${antennaKey}`;
+  let configuration = cache.byConfiguration.get(key);
+  if (configuration === undefined) {
+    configuration = new Map();
+    cache.byConfiguration.set(key, configuration);
+  }
+  return configuration;
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {

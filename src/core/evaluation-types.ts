@@ -35,4 +35,9 @@ export interface EvaluationOptions extends EvaluationInstrumentation {
   readonly fullDiagnosticCoverage?: boolean;
   readonly signal?: AbortSignal;
   readonly onProgress?: (progress: EvaluationProgress) => void;
+  readonly visibilityCache?: EvaluationVisibilityCache;
+}
+
+export interface EvaluationVisibilityCache {
+  readonly byConfiguration: Map<string, Map<string, BuildingVisibility>>;
 }

@@ -1,7 +1,4 @@
 import Polygon from "@arcgis/core/geometry/Polygon.js";
-import Polyline from "@arcgis/core/geometry/Polyline.js";
-import * as lengthOperator from "@arcgis/core/geometry/operators/lengthOperator.js";
-import * as relateOperator from "@arcgis/core/geometry/operators/relateOperator.js";
 import * as simplifyOperator from "@arcgis/core/geometry/operators/simplifyOperator.js";
 import RBush from "rbush";
 
@@ -103,6 +100,7 @@ export function loadBuildingDataset(input: unknown): BuildingDataset {
     buildingIndex,
     boundaryIndex,
     vertexIndex,
+    polygonCache: new Map(),
     edgeCount,
     vertexCount,
   };
@@ -114,7 +112,6 @@ function createBuildingIndexItem(building: PreparedBuilding): BuildingIndexItem 
     minY: building.extent.ymin,
     maxX: building.extent.xmax,
     maxY: building.extent.ymax,
-    buildingId: building.id,
     buildingInputIndex: building.inputIndex,
   };
 }
@@ -128,7 +125,6 @@ function createBoundaryIndexItem(
     minY: Math.min(edge.start[1], edge.end[1]),
     maxX: Math.max(edge.start[0], edge.end[0]),
     maxY: Math.max(edge.start[1], edge.end[1]),
-    buildingId: building.id,
     buildingInputIndex: building.inputIndex,
     edgeIndex: edge.edgeIndex,
   };
@@ -144,9 +140,6 @@ function createVertexIndexItem(
     minY: y,
     maxX: x,
     maxY: y,
-    x,
-    y,
-    buildingId: building.id,
     buildingInputIndex: building.inputIndex,
     vertexIndex,
   };
@@ -250,9 +243,8 @@ function prepareBuilding(
     );
   }
 
-  const boundaryPath = closedRing.map(([x, y]) => [x, y]);
-  const boundary = new Polyline({ paths: [boundaryPath], spatialReference });
-  const perimeterMeters = lengthOperator.execute(boundary, { unit: "meters" });
+  const edges = createEdges(vertices);
+  const perimeterMeters = edges.reduce((total, edge) => total + edge.lengthMeters, 0);
 
   if (!Number.isFinite(perimeterMeters) || perimeterMeters <= 0) {
     throw new DatasetValidationError(
@@ -262,23 +254,11 @@ function prepareBuilding(
     );
   }
 
-  const edges = createEdges(id, vertices);
-  relateOperator.accelerateGeometry(polygon);
-  const extent = polygon.extent;
-
-  if (extent === null || extent === undefined) {
-    throw new DatasetValidationError(
-      "ZERO_PERIMETER",
-      `Building ${JSON.stringify(id)} did not produce a valid extent.`,
-      buildingContext,
-    );
-  }
+  const extent = coordinateExtent(vertices);
 
   return {
     id,
     inputIndex,
-    polygon,
-    boundary,
     extent,
     vertices,
     edges,
@@ -286,7 +266,7 @@ function prepareBuilding(
   };
 }
 
-function createEdges(buildingId: string, vertices: readonly Coordinate[]): BuildingEdge[] {
+function createEdges(vertices: readonly Coordinate[]): BuildingEdge[] {
   return vertices.map((start, edgeIndex) => {
     const end = vertices[(edgeIndex + 1) % vertices.length];
     if (end === undefined) {
@@ -294,13 +274,30 @@ function createEdges(buildingId: string, vertices: readonly Coordinate[]): Build
     }
 
     return {
-      buildingId,
       edgeIndex,
       start,
       end,
       lengthMeters: Math.hypot(end[0] - start[0], end[1] - start[1]),
     };
   });
+}
+
+function coordinateExtent(vertices: readonly Coordinate[]): PreparedBuilding["extent"] {
+  const first = vertices[0];
+  if (first === undefined) throw new Error("Validated polygon unexpectedly has no vertices.");
+  let xmin = first[0];
+  let ymin = first[1];
+  let xmax = first[0];
+  let ymax = first[1];
+
+  for (const [x, y] of vertices.slice(1)) {
+    xmin = Math.min(xmin, x);
+    ymin = Math.min(ymin, y);
+    xmax = Math.max(xmax, x);
+    ymax = Math.max(ymax, y);
+  }
+
+  return { xmin, ymin, xmax, ymax };
 }
 
 function canonicalizeBuildingId(input: unknown, featureIndex: number): string {

@@ -116,6 +116,21 @@ describe("subproblem evaluation", () => {
     expect(diagnostic.buildingResults[0]?.coverageKind).toBe("complete");
     expect(diagnostic.buildingResults[0]?.coverage).toBeCloseTo(1, 9);
   });
+
+  it("reuses visibility for an identical antenna and threshold configuration", async () => {
+    const dataset = squareDataset();
+    const parsed = parseSolutionText("(0.5, 1)\n(500000, 3700000)\ntarget");
+    const source = parsed.subproblems[0];
+    if (source === undefined) throw new Error("Expected subproblem.");
+    const validated = validateSubproblemInput(source, dataset);
+    const visibilityCache = { byConfiguration: new Map() };
+
+    const first = await evaluateValidatedSubproblemAsync(dataset, validated, { visibilityCache });
+    const second = await evaluateValidatedSubproblemAsync(dataset, validated, { visibilityCache });
+
+    expect(second.buildingResults[0]?.visibility).toBe(first.buildingResults[0]?.visibility);
+    expect(visibilityCache.byConfiguration.size).toBe(1);
+  });
 });
 
 function evaluate(dataset: ReturnType<typeof squareDataset>, solution: string) {

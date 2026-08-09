@@ -1,6 +1,7 @@
 import Point from "@arcgis/core/geometry/Point.js";
 
 import { SPATIAL_TOLERANCE_METERS } from "./constants.js";
+import { getBuildingPolygon } from "./building-polygon-cache.js";
 import type { BuildingDataset, BuildingEdge, Coordinate } from "./dataset-types.js";
 import { isBlockedByPolygon } from "./line-of-sight.js";
 import type { ValidatedAntenna } from "./submission-types.js";
@@ -12,6 +13,7 @@ import type {
 } from "./visibility-types.js";
 
 const PARAMETER_EPSILON = 1e-12;
+const COOPERATIVE_YIELD_INTERVAL = 64;
 
 export function computeBuildingVisibility(
   dataset: BuildingDataset,
@@ -71,6 +73,89 @@ export function computeBuildingVisibility(
     "complete",
     processedAntennaCount,
   );
+}
+
+export async function computeBuildingVisibilityAsync(
+  dataset: BuildingDataset,
+  buildingId: string,
+  antennas: readonly ValidatedAntenna[],
+  options: VisibilityComputationOptions = {},
+): Promise<BuildingVisibility> {
+  const building = dataset.buildingById.get(buildingId);
+  if (building === undefined) {
+    throw new Error(`Unknown target building ID ${JSON.stringify(buildingId)}.`);
+  }
+
+  const scheduler = new CooperativeScheduler(options.signal);
+  const edgeIntervals = building.edges.map((): ParameterInterval[] => []);
+  const orderedAntennas = options.requiredVisibleLengthMeters !== undefined
+    && !options.fullDiagnosticCoverage
+    ? orderAntennasByTargetDistance(antennas, building.extent)
+    : [...antennas];
+  let processedAntennaCount = 0;
+
+  for (const antenna of orderedAntennas) {
+    const antennaYield = scheduler.checkpoint();
+    if (antennaYield !== undefined) await antennaYield;
+
+    for (const [edgeIndex, edge] of building.edges.entries()) {
+      const existingIntervals = edgeIntervals[edgeIndex];
+      if (existingIntervals === undefined || isEntireEdgeVisible(existingIntervals)) continue;
+      const antennaIntervals = await computeVisibleIntervalsForEdgeAsync(
+        dataset,
+        edge,
+        antenna.evaluatedCoordinate,
+        scheduler,
+      );
+      edgeIntervals[edgeIndex] = unionParameterIntervals(existingIntervals, antennaIntervals);
+    }
+    processedAntennaCount += 1;
+
+    const visibleLengthMeters = calculateVisibleLength(building.edges, edgeIntervals);
+    if (
+      options.requiredVisibleLengthMeters !== undefined
+      && !options.fullDiagnosticCoverage
+      && visibleLengthMeters >= options.requiredVisibleLengthMeters
+    ) {
+      return createBuildingVisibility(
+        building,
+        edgeIntervals,
+        visibleLengthMeters,
+        processedAntennaCount < orderedAntennas.length ? "lower-bound" : "complete",
+        processedAntennaCount,
+      );
+    }
+  }
+
+  return createBuildingVisibility(
+    building,
+    edgeIntervals,
+    calculateVisibleLength(building.edges, edgeIntervals),
+    "complete",
+    processedAntennaCount,
+  );
+}
+
+async function computeVisibleIntervalsForEdgeAsync(
+  dataset: BuildingDataset,
+  edge: BuildingEdge,
+  antenna: Coordinate,
+  scheduler: CooperativeScheduler,
+): Promise<ParameterInterval[]> {
+  const breakpoints = generateCriticalParametersForEdge(dataset, edge, antenna);
+  const intervals: ParameterInterval[] = [];
+
+  for (let index = 0; index < breakpoints.length - 1; index += 1) {
+    const intervalYield = scheduler.checkpoint();
+    if (intervalYield !== undefined) await intervalYield;
+    const start = breakpoints[index];
+    const end = breakpoints[index + 1];
+    if (start === undefined || end === undefined || end - start <= PARAMETER_EPSILON) continue;
+    const target = interpolate(edge.start, edge.end, (start + end) / 2);
+    if (!isSightLineBlocked(dataset, antenna, target)) intervals.push({ start, end });
+  }
+
+  return unionParameterIntervals([], intervals);
 }
 
 export function computeVisibleIntervalsForEdge(
@@ -177,11 +262,9 @@ export function isSightLineBlocked(
     maxX: Math.max(start[0], end[0]) + SPATIAL_TOLERANCE_METERS,
     maxY: Math.max(start[1], end[1]) + SPATIAL_TOLERANCE_METERS,
   });
-  const candidateIds = [...new Set(candidates.map((candidate) => candidate.buildingId))]
+  const candidateIndexes = [...new Set(candidates.map((candidate) => candidate.buildingInputIndex))]
     .sort((left, right) => {
-      const leftBuilding = dataset.buildingById.get(left);
-      const rightBuilding = dataset.buildingById.get(right);
-      return (leftBuilding?.inputIndex ?? 0) - (rightBuilding?.inputIndex ?? 0);
+      return left - right;
     });
   const startPoint = new Point({
     x: start[0],
@@ -194,9 +277,12 @@ export function isSightLineBlocked(
     spatialReference: dataset.spatialReference,
   });
 
-  for (const buildingId of candidateIds) {
-    const building = dataset.buildingById.get(buildingId);
-    if (building !== undefined && isBlockedByPolygon(startPoint, endPoint, building.polygon)) {
+  for (const buildingIndex of candidateIndexes) {
+    const building = dataset.buildings[buildingIndex];
+    if (
+      building !== undefined
+      && isBlockedByPolygon(startPoint, endPoint, getBuildingPolygon(dataset, building))
+    ) {
       return true;
     }
   }
@@ -256,7 +342,7 @@ export function generateCriticalParametersForEdge(
 
   const vertices = dataset.vertexIndex.search({ minX, minY, maxX, maxY });
   for (const vertex of vertices) {
-    const ray = subtract([vertex.x, vertex.y], antenna);
+    const ray = subtract([vertex.minX, vertex.minY], antenna);
     if (Math.hypot(ray[0], ray[1]) <= SPATIAL_TOLERANCE_METERS) continue;
 
     const denominator = cross(ray, edgeVector);
@@ -330,4 +416,24 @@ function clampParameter(value: number): number {
 
 function coordinatesEqual(left: Coordinate, right: Coordinate): boolean {
   return left[0] === right[0] && left[1] === right[1];
+}
+
+class CooperativeScheduler {
+  private checkpointCount = 0;
+
+  public constructor(private readonly signal: AbortSignal | undefined) {}
+
+  public checkpoint(): Promise<void> | undefined {
+    throwIfAborted(this.signal);
+    this.checkpointCount += 1;
+    if (this.checkpointCount % COOPERATIVE_YIELD_INTERVAL === 0) {
+      return this.yieldToEventLoop();
+    }
+    return undefined;
+  }
+
+  private async yieldToEventLoop(): Promise<void> {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    throwIfAborted(this.signal);
+  }
 }

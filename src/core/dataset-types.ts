@@ -1,13 +1,10 @@
-import type Extent from "@arcgis/core/geometry/Extent.js";
 import type Polygon from "@arcgis/core/geometry/Polygon.js";
-import type Polyline from "@arcgis/core/geometry/Polyline.js";
 import type SpatialReference from "@arcgis/core/geometry/SpatialReference.js";
 import type RBush from "rbush";
 
 export type Coordinate = readonly [x: number, y: number];
 
 export interface BuildingEdge {
-  readonly buildingId: string;
   readonly edgeIndex: number;
   readonly start: Coordinate;
   readonly end: Coordinate;
@@ -19,7 +16,6 @@ export interface BoundaryIndexItem {
   readonly minY: number;
   readonly maxX: number;
   readonly maxY: number;
-  readonly buildingId: string;
   readonly buildingInputIndex: number;
   readonly edgeIndex: number;
 }
@@ -29,7 +25,6 @@ export interface BuildingIndexItem {
   readonly minY: number;
   readonly maxX: number;
   readonly maxY: number;
-  readonly buildingId: string;
   readonly buildingInputIndex: number;
 }
 
@@ -38,19 +33,21 @@ export interface VertexIndexItem {
   readonly minY: number;
   readonly maxX: number;
   readonly maxY: number;
-  readonly x: number;
-  readonly y: number;
-  readonly buildingId: string;
   readonly buildingInputIndex: number;
   readonly vertexIndex: number;
+}
+
+export interface BuildingExtent {
+  readonly xmin: number;
+  readonly ymin: number;
+  readonly xmax: number;
+  readonly ymax: number;
 }
 
 export interface PreparedBuilding {
   readonly id: string;
   readonly inputIndex: number;
-  readonly polygon: Polygon;
-  readonly boundary: Polyline;
-  readonly extent: Extent;
+  readonly extent: BuildingExtent;
   readonly vertices: readonly Coordinate[];
   readonly edges: readonly BuildingEdge[];
   readonly perimeterMeters: number;
@@ -64,6 +61,7 @@ export interface BuildingDataset {
   readonly buildingIndex: RBush<BuildingIndexItem>;
   readonly boundaryIndex: RBush<BoundaryIndexItem>;
   readonly vertexIndex: RBush<VertexIndexItem>;
+  readonly polygonCache: Map<number, Polygon>;
   readonly edgeCount: number;
   readonly vertexCount: number;
 }

@@ -7,6 +7,7 @@ import { parseBuildingDatasetText } from "../core/dataset-loader.js";
 import type { BuildingDataset } from "../core/dataset-types.js";
 import { evaluateValidatedSubproblemAsync } from "../core/evaluation-engine.js";
 import type { EvaluatedSubproblem } from "../core/evaluation-types.js";
+import type { EvaluationVisibilityCache } from "../core/evaluation-types.js";
 import { sha256Hex } from "../core/hash.js";
 import { parseSolutionText } from "../core/solution-parser.js";
 import { buildEvaluationReport, type ReportInputMetadata } from "../core/report-builder.js";
@@ -120,11 +121,13 @@ async function loadSolution(
     const validated = parsed.subproblems.map((subproblem) =>
       validateSubproblemInput(subproblem, dataset));
     const evaluated: EvaluatedSubproblem[] = [];
+    const visibilityCache: EvaluationVisibilityCache = { byConfiguration: new Map() };
 
     for (const subproblem of validated) {
       evaluated.push(await evaluateValidatedSubproblemAsync(dataset, subproblem, {
         fullDiagnosticCoverage,
         signal: controller.signal,
+        visibilityCache,
         onProgress: (progress) => {
           const response: EvaluatorWorkerResponse = {
             type: "evaluation-progress",
