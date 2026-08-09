@@ -2,6 +2,7 @@ import type Extent from "@arcgis/core/geometry/Extent.js";
 import type Polygon from "@arcgis/core/geometry/Polygon.js";
 import type Polyline from "@arcgis/core/geometry/Polyline.js";
 import type SpatialReference from "@arcgis/core/geometry/SpatialReference.js";
+import type RBush from "rbush";
 
 export type Coordinate = readonly [x: number, y: number];
 
@@ -11,6 +12,16 @@ export interface BuildingEdge {
   readonly start: Coordinate;
   readonly end: Coordinate;
   readonly lengthMeters: number;
+}
+
+export interface BoundaryIndexItem {
+  readonly minX: number;
+  readonly minY: number;
+  readonly maxX: number;
+  readonly maxY: number;
+  readonly buildingId: string;
+  readonly buildingInputIndex: number;
+  readonly edgeIndex: number;
 }
 
 export interface PreparedBuilding {
@@ -29,7 +40,7 @@ export interface BuildingDataset {
   readonly spatialReferenceWkid: number;
   readonly buildings: readonly PreparedBuilding[];
   readonly buildingById: ReadonlyMap<string, PreparedBuilding>;
+  readonly boundaryIndex: RBush<BoundaryIndexItem>;
   readonly edgeCount: number;
   readonly vertexCount: number;
 }
-

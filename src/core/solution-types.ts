@@ -7,7 +7,12 @@ export type SolutionWarningCode =
   | "EXTRA_ANTENNAS"
   | "MALFORMED_ANTENNA"
   | "NONFINITE_ANTENNA"
-  | "EMPTY_BUILDING_ID";
+  | "EMPTY_BUILDING_ID"
+  | "ANTENNA_OFF_BOUNDARY"
+  | "ANTENNA_SNAPPED"
+  | "DUPLICATE_ANTENNA"
+  | "UNKNOWN_BUILDING_ID"
+  | "DUPLICATE_BUILDING_ID";
 
 export interface SolutionWarning {
   readonly code: SolutionWarningCode;
@@ -46,4 +51,3 @@ export interface ParsedSolution {
   readonly subproblems: readonly ParsedSubproblem[];
   readonly warnings: readonly SolutionWarning[];
 }
-

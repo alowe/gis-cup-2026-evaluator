@@ -17,6 +17,7 @@ describe("building dataset loader", () => {
     expect(dataset.buildingById.has("third")).toBe(true);
     expect(dataset.edgeCount).toBe(12);
     expect(dataset.vertexCount).toBe(12);
+    expect(dataset.boundaryIndex.all()).toHaveLength(12);
     expect(dataset.buildings.map((building) => building.perimeterMeters)).toEqual([4, 4, 4]);
     expect(dataset.buildings.every((building) => building.edges.length === 4)).toBe(true);
   });

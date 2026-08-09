@@ -3,11 +3,13 @@ import Polyline from "@arcgis/core/geometry/Polyline.js";
 import * as lengthOperator from "@arcgis/core/geometry/operators/lengthOperator.js";
 import * as relateOperator from "@arcgis/core/geometry/operators/relateOperator.js";
 import * as simplifyOperator from "@arcgis/core/geometry/operators/simplifyOperator.js";
+import RBush from "rbush";
 
 import { DatasetValidationError } from "./dataset-errors.js";
 import type {
   BuildingDataset,
   BuildingEdge,
+  BoundaryIndexItem,
   Coordinate,
   PreparedBuilding,
 } from "./dataset-types.js";
@@ -57,6 +59,7 @@ export function loadBuildingDataset(input: unknown): BuildingDataset {
 
   const buildings: PreparedBuilding[] = [];
   const buildingById = new Map<string, PreparedBuilding>();
+  const boundaryItems: BoundaryIndexItem[] = [];
   let edgeCount = 0;
   let vertexCount = 0;
 
@@ -75,15 +78,35 @@ export function loadBuildingDataset(input: unknown): BuildingDataset {
     buildingById.set(building.id, building);
     edgeCount += building.edges.length;
     vertexCount += building.vertices.length;
+    boundaryItems.push(...building.edges.map((edge) => createBoundaryIndexItem(building, edge)));
   }
+
+  const boundaryIndex = new RBush<BoundaryIndexItem>();
+  boundaryIndex.load(boundaryItems);
 
   return {
     spatialReference,
     spatialReferenceWkid,
     buildings,
     buildingById,
+    boundaryIndex,
     edgeCount,
     vertexCount,
+  };
+}
+
+function createBoundaryIndexItem(
+  building: PreparedBuilding,
+  edge: BuildingEdge,
+): BoundaryIndexItem {
+  return {
+    minX: Math.min(edge.start[0], edge.end[0]),
+    minY: Math.min(edge.start[1], edge.end[1]),
+    maxX: Math.max(edge.start[0], edge.end[0]),
+    maxY: Math.max(edge.start[1], edge.end[1]),
+    buildingId: building.id,
+    buildingInputIndex: building.inputIndex,
+    edgeIndex: edge.edgeIndex,
   };
 }
 

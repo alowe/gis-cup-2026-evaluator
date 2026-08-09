@@ -5,7 +5,9 @@ import { SPATIAL_TOLERANCE_METERS, TEST_SPATIAL_REFERENCE_WKID } from "../core/c
 import { DatasetValidationError } from "../core/dataset-errors.js";
 import { parseBuildingDatasetText } from "../core/dataset-loader.js";
 import type { BuildingDataset } from "../core/dataset-types.js";
+import { parseSolutionText } from "../core/solution-parser.js";
 import { createMeterSpatialReference } from "../core/spatial-reference.js";
+import { validateSubproblemInput } from "../core/submission-validator.js";
 
 const worker = self as DedicatedWorkerGlobalScope;
 const spatialReference = createMeterSpatialReference(TEST_SPATIAL_REFERENCE_WKID);
@@ -24,10 +26,15 @@ worker.addEventListener("message", (event: MessageEvent<EvaluatorWorkerRequest>)
     case "load-dataset":
       void loadDataset(event.data.requestId, event.data.file);
       break;
+    case "load-solution":
+      void loadSolution(event.data.requestId, event.data.file);
+      break;
   }
 });
 
 async function loadDataset(requestId: number, file: File): Promise<void> {
+  activeDataset = undefined;
+
   try {
     activeDataset = parseBuildingDatasetText(await file.text());
     const response: EvaluatorWorkerResponse = {
@@ -62,4 +69,63 @@ async function loadDataset(requestId: number, file: File): Promise<void> {
     };
     worker.postMessage(response);
   }
+}
+
+async function loadSolution(requestId: number, file: File): Promise<void> {
+  const dataset = activeDataset;
+  if (dataset === undefined) {
+    postSolutionError(requestId, {
+      code: "DATASET_REQUIRED",
+      message: "Load a valid building dataset before loading a solution.",
+    });
+    return;
+  }
+
+  try {
+    const parsed = parseSolutionText(await file.text());
+    const validated = parsed.subproblems.map((subproblem) =>
+      validateSubproblemInput(subproblem, dataset),
+    );
+    const response: EvaluatorWorkerResponse = {
+      type: "solution-validated",
+      requestId,
+      summary: {
+        fileName: file.name,
+        fileSizeBytes: file.size,
+        warningCount: validated.reduce((total, subproblem) => total + subproblem.warnings.length, 0),
+        subproblems: validated.map((subproblem) => ({
+          index: subproblem.source.index,
+          complete: subproblem.source.complete,
+          parametersValid: subproblem.source.parametersValid,
+          tau: subproblem.source.tau,
+          k: subproblem.source.k,
+          reportedAntennaCount: subproblem.source.antennas.length,
+          retainedAntennaCount: subproblem.source.retainedAntennas.length,
+          validAntennaCount: subproblem.validAntennas.length,
+          uniqueAntennaCount: subproblem.uniqueAntennas.length,
+          reportedClaimCount: subproblem.claims.reportedIds.length,
+          uniqueKnownClaimCount: subproblem.claims.uniqueKnownIds.length,
+          warningCount: subproblem.warnings.length,
+        })),
+      },
+    };
+    worker.postMessage(response);
+  } catch (error: unknown) {
+    postSolutionError(requestId, {
+      code: "SOLUTION_LOAD_FAILED",
+      message: error instanceof Error ? error.message : "Solution loading failed unexpectedly.",
+    });
+  }
+}
+
+function postSolutionError(
+  requestId: number,
+  error: { readonly code: string; readonly message: string },
+): void {
+  const response: EvaluatorWorkerResponse = {
+    type: "solution-error",
+    requestId,
+    error,
+  };
+  worker.postMessage(response);
 }
