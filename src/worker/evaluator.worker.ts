@@ -5,14 +5,19 @@ import { SPATIAL_TOLERANCE_METERS, TEST_SPATIAL_REFERENCE_WKID } from "../core/c
 import { DatasetValidationError } from "../core/dataset-errors.js";
 import { parseBuildingDatasetText } from "../core/dataset-loader.js";
 import type { BuildingDataset } from "../core/dataset-types.js";
-import { evaluateValidatedSubproblem } from "../core/evaluation-engine.js";
+import { evaluateValidatedSubproblemAsync } from "../core/evaluation-engine.js";
+import type { EvaluatedSubproblem } from "../core/evaluation-types.js";
+import { sha256Hex } from "../core/hash.js";
 import { parseSolutionText } from "../core/solution-parser.js";
+import { buildEvaluationReport, type ReportInputMetadata } from "../core/report-builder.js";
 import { createMeterSpatialReference } from "../core/spatial-reference.js";
 import { validateSubproblemInput } from "../core/submission-validator.js";
 
 const worker = self as DedicatedWorkerGlobalScope;
 const spatialReference = createMeterSpatialReference(TEST_SPATIAL_REFERENCE_WKID);
 let activeDataset: BuildingDataset | undefined;
+let activeDatasetInput: ReportInputMetadata | undefined;
+let activeEvaluation: { readonly requestId: number; readonly controller: AbortController } | undefined;
 
 worker.addEventListener("message", (event: MessageEvent<EvaluatorWorkerRequest>) => {
   switch (event.data.type) {
@@ -28,16 +33,31 @@ worker.addEventListener("message", (event: MessageEvent<EvaluatorWorkerRequest>)
       void loadDataset(event.data.requestId, event.data.file);
       break;
     case "load-solution":
-      void loadSolution(event.data.requestId, event.data.file);
+      void loadSolution(
+        event.data.requestId,
+        event.data.file,
+        event.data.fullDiagnosticCoverage,
+      );
+      break;
+    case "cancel-evaluation":
+      if (activeEvaluation?.requestId === event.data.requestId) {
+        activeEvaluation.controller.abort(new DOMException("Evaluation cancelled.", "AbortError"));
+      }
       break;
   }
 });
 
 async function loadDataset(requestId: number, file: File): Promise<void> {
+  activeEvaluation?.controller.abort(new DOMException("Dataset changed.", "AbortError"));
   activeDataset = undefined;
+  activeDatasetInput = undefined;
 
   try {
-    activeDataset = parseBuildingDatasetText(await file.text());
+    const bytes = await file.arrayBuffer();
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    const sha256 = await sha256Hex(bytes);
+    activeDataset = parseBuildingDatasetText(text);
+    activeDatasetInput = { fileName: file.name, sha256 };
     const response: EvaluatorWorkerResponse = {
       type: "dataset-loaded",
       requestId,
@@ -48,6 +68,7 @@ async function loadDataset(requestId: number, file: File): Promise<void> {
         buildingCount: activeDataset.buildings.length,
         edgeCount: activeDataset.edgeCount,
         vertexCount: activeDataset.vertexCount,
+        sha256,
       },
     };
     worker.postMessage(response);
@@ -72,9 +93,14 @@ async function loadDataset(requestId: number, file: File): Promise<void> {
   }
 }
 
-async function loadSolution(requestId: number, file: File): Promise<void> {
+async function loadSolution(
+  requestId: number,
+  file: File,
+  fullDiagnosticCoverage: boolean,
+): Promise<void> {
   const dataset = activeDataset;
-  if (dataset === undefined) {
+  const datasetInput = activeDatasetInput;
+  if (dataset === undefined || datasetInput === undefined) {
     postSolutionError(requestId, {
       code: "DATASET_REQUIRED",
       message: "Load a valid building dataset before loading a solution.",
@@ -82,15 +108,45 @@ async function loadSolution(requestId: number, file: File): Promise<void> {
     return;
   }
 
+  activeEvaluation?.controller.abort(new DOMException("A newer evaluation started.", "AbortError"));
+  const controller = new AbortController();
+  activeEvaluation = { requestId, controller };
+
   try {
-    const parsed = parseSolutionText(await file.text());
+    const bytes = await file.arrayBuffer();
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    const solutionInput = { fileName: file.name, sha256: await sha256Hex(bytes) };
+    const parsed = parseSolutionText(text);
     const validated = parsed.subproblems.map((subproblem) =>
       validateSubproblemInput(subproblem, dataset));
-    const evaluated = validated.map((subproblem) =>
-      evaluateValidatedSubproblem(dataset, subproblem));
+    const evaluated: EvaluatedSubproblem[] = [];
+
+    for (const subproblem of validated) {
+      evaluated.push(await evaluateValidatedSubproblemAsync(dataset, subproblem, {
+        fullDiagnosticCoverage,
+        signal: controller.signal,
+        onProgress: (progress) => {
+          const response: EvaluatorWorkerResponse = {
+            type: "evaluation-progress",
+            requestId,
+            ...progress,
+          };
+          worker.postMessage(response);
+        },
+      }));
+    }
+
+    const report = buildEvaluationReport(
+      dataset,
+      datasetInput,
+      solutionInput,
+      evaluated,
+      fullDiagnosticCoverage,
+    );
     const response: EvaluatorWorkerResponse = {
       type: "solution-validated",
       requestId,
+      report,
       summary: {
         fileName: file.name,
         fileSizeBytes: file.size,
@@ -114,10 +170,13 @@ async function loadSolution(requestId: number, file: File): Promise<void> {
     };
     worker.postMessage(response);
   } catch (error: unknown) {
+    const cancelled = error instanceof DOMException && error.name === "AbortError";
     postSolutionError(requestId, {
-      code: "SOLUTION_LOAD_FAILED",
+      code: cancelled ? "EVALUATION_CANCELLED" : "SOLUTION_LOAD_FAILED",
       message: error instanceof Error ? error.message : "Solution loading failed unexpectedly.",
     });
+  } finally {
+    if (activeEvaluation?.requestId === requestId) activeEvaluation = undefined;
   }
 }
 

@@ -4,6 +4,7 @@ import type {
   EvaluatorWorkerResponse,
   SubproblemValidationSummary,
 } from "./worker/messages.js";
+import type { EvaluationReport } from "./core/report-types.js";
 
 const app = document.querySelector<HTMLElement>("#app");
 
@@ -41,6 +42,13 @@ app.innerHTML = `
         <input data-solution-input type="file" accept=".txt,text/plain" disabled />
       </label>
     </section>
+    <div class="evaluation-options">
+      <label><input data-full-coverage type="checkbox" /> Compute full diagnostic coverage</label>
+      <div class="actions">
+        <button data-cancel type="button" disabled>Cancel</button>
+        <button data-export type="button" disabled>Download JSON report</button>
+      </div>
+    </div>
     <div class="status" data-status>Starting geometry worker…</div>
     <div class="results" data-results hidden></div>
   </section>
@@ -50,8 +58,19 @@ const status = document.querySelector<HTMLElement>("[data-status]");
 const datasetInput = document.querySelector<HTMLInputElement>("[data-dataset-input]");
 const solutionInput = document.querySelector<HTMLInputElement>("[data-solution-input]");
 const results = document.querySelector<HTMLElement>("[data-results]");
+const fullCoverageInput = document.querySelector<HTMLInputElement>("[data-full-coverage]");
+const cancelButton = document.querySelector<HTMLButtonElement>("[data-cancel]");
+const exportButton = document.querySelector<HTMLButtonElement>("[data-export]");
 
-if (status === null || datasetInput === null || solutionInput === null || results === null) {
+if (
+  status === null
+  || datasetInput === null
+  || solutionInput === null
+  || results === null
+  || fullCoverageInput === null
+  || cancelButton === null
+  || exportButton === null
+) {
   throw new Error("Required evaluator controls were not found.");
 }
 
@@ -72,6 +91,8 @@ evaluatorWorker.addEventListener(
         const summary = event.data.summary;
         datasetInput.disabled = false;
         solutionInput.disabled = false;
+        exportButton.disabled = true;
+        latestReport = undefined;
         status.dataset.state = "success";
         status.textContent = `${summary.fileName}: ${summary.buildingCount.toLocaleString()} buildings, ${summary.vertexCount.toLocaleString()} vertices · EPSG:${summary.spatialReferenceWkid}`;
         break;
@@ -80,12 +101,17 @@ evaluatorWorker.addEventListener(
         if (event.data.requestId !== activeDatasetRequestId) return;
         datasetInput.disabled = false;
         solutionInput.disabled = true;
+        exportButton.disabled = true;
+        latestReport = undefined;
         status.dataset.state = "error";
         status.textContent = `${event.data.error.code}: ${event.data.error.message}`;
         break;
       case "solution-validated":
         if (event.data.requestId !== activeSolutionRequestId) return;
         solutionInput.disabled = false;
+        cancelButton.disabled = true;
+        exportButton.disabled = false;
+        latestReport = event.data.report;
         status.dataset.state = "success";
         status.textContent = `${event.data.summary.fileName}: ${event.data.summary.subproblems.length} configuration(s), ${event.data.summary.warningCount} warning(s)`;
         renderSolutionSummary(results, event.data.summary.subproblems);
@@ -93,8 +119,13 @@ evaluatorWorker.addEventListener(
       case "solution-error":
         if (event.data.requestId !== activeSolutionRequestId) return;
         solutionInput.disabled = false;
+        cancelButton.disabled = true;
         status.dataset.state = "error";
         status.textContent = `${event.data.error.code}: ${event.data.error.message}`;
+        break;
+      case "evaluation-progress":
+        if (event.data.requestId !== activeSolutionRequestId) return;
+        status.textContent = `Configuration ${event.data.subproblemIndex}: evaluated ${event.data.completedBuildingCount}/${event.data.totalBuildingCount} claims · ${event.data.buildingId}`;
         break;
     }
   },
@@ -110,15 +141,20 @@ evaluatorWorker.postMessage(request);
 
 let activeDatasetRequestId = 0;
 let activeSolutionRequestId = 0;
+let latestReport: EvaluationReport | undefined;
 
 datasetInput.addEventListener("change", () => {
   const file = datasetInput.files?.[0];
   if (file === undefined) return;
 
   activeDatasetRequestId += 1;
+  activeSolutionRequestId += 1;
   datasetInput.disabled = true;
   solutionInput.disabled = true;
+  cancelButton.disabled = true;
   results.hidden = true;
+  exportButton.disabled = true;
+  latestReport = undefined;
   delete status.dataset.state;
   status.textContent = `Validating ${file.name}…`;
 
@@ -136,6 +172,9 @@ solutionInput.addEventListener("change", () => {
 
   activeSolutionRequestId += 1;
   solutionInput.disabled = true;
+  cancelButton.disabled = false;
+  exportButton.disabled = true;
+  latestReport = undefined;
   results.hidden = true;
   delete status.dataset.state;
   status.textContent = `Validating ${file.name}…`;
@@ -144,8 +183,33 @@ solutionInput.addEventListener("change", () => {
     type: "load-solution",
     requestId: activeSolutionRequestId,
     file,
+    fullDiagnosticCoverage: fullCoverageInput.checked,
   };
   evaluatorWorker.postMessage(loadRequest);
+});
+
+cancelButton.addEventListener("click", () => {
+  const cancelRequest: EvaluatorWorkerRequest = {
+    type: "cancel-evaluation",
+    requestId: activeSolutionRequestId,
+  };
+  evaluatorWorker.postMessage(cancelRequest);
+  cancelButton.disabled = true;
+  status.textContent = "Cancelling evaluation…";
+});
+
+exportButton.addEventListener("click", () => {
+  if (latestReport === undefined) return;
+
+  const blob = new Blob([`${JSON.stringify(latestReport, null, 2)}\n`], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${stripFileExtension(latestReport.solution.fileName)}.evaluation.json`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 });
 
 function renderSolutionSummary(
@@ -183,4 +247,9 @@ function renderSolutionSummary(
   table.append(body);
   container.append(table);
   container.hidden = false;
+}
+
+function stripFileExtension(fileName: string): string {
+  const lastDot = fileName.lastIndexOf(".");
+  return lastDot > 0 ? fileName.slice(0, lastDot) : fileName;
 }

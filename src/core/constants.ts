@@ -1,3 +1,5 @@
 export const SPATIAL_TOLERANCE_METERS = 0.001;
 export const DISTANCE_TIE_TOLERANCE_METERS = 1e-9;
 export const TEST_SPATIAL_REFERENCE_WKID = 32611;
+export const EVALUATOR_VERSION = "0.1.0";
+export const ARCGIS_VERSION = "5.1.0";

@@ -118,6 +118,42 @@ h2 {
   box-shadow: 0 0.75rem 2rem rgb(35 62 68 / 7%);
 }
 
+.evaluation-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  color: #53616c;
+  font-size: 0.9rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+button {
+  padding: 0.55rem 0.8rem;
+  border: 1px solid #b9c8cc;
+  border-radius: 0.5rem;
+  background: white;
+  color: #24323b;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+}
+
+button:hover:not(:disabled) {
+  border-color: #176757;
+  color: #176757;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .status[data-state="error"] {
   border-color: #d79a94;
   color: #8b2f26;
@@ -167,6 +203,11 @@ tbody tr:last-child td {
   }
 
   .panel {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .evaluation-options {
     align-items: flex-start;
     flex-direction: column;
   }

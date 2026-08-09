@@ -17,5 +17,12 @@ export interface BuildingVisibility {
   readonly visibleLengthMeters: number;
   readonly perimeterMeters: number;
   readonly coverage: number;
+  readonly coverageKind: "complete" | "lower-bound";
+  readonly processedAntennaCount: number;
 }
 
+export interface VisibilityComputationOptions {
+  readonly requiredVisibleLengthMeters?: number;
+  readonly fullDiagnosticCoverage?: boolean;
+  readonly signal?: AbortSignal;
+}

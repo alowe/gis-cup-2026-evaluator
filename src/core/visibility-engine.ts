@@ -8,6 +8,7 @@ import type {
   BuildingVisibility,
   EdgeVisibility,
   ParameterInterval,
+  VisibilityComputationOptions,
 } from "./visibility-types.js";
 
 const PARAMETER_EPSILON = 1e-12;
@@ -16,54 +17,73 @@ export function computeBuildingVisibility(
   dataset: BuildingDataset,
   buildingId: string,
   antennas: readonly ValidatedAntenna[],
+  options: VisibilityComputationOptions = {},
 ): BuildingVisibility {
   const building = dataset.buildingById.get(buildingId);
   if (building === undefined) {
     throw new Error(`Unknown target building ID ${JSON.stringify(buildingId)}.`);
   }
 
-  const edges: EdgeVisibility[] = building.edges.map((edge) => {
-    let visibleIntervals: ParameterInterval[] = [];
+  const edgeIntervals = building.edges.map((): ParameterInterval[] => []);
+  const orderedAntennas = options.requiredVisibleLengthMeters !== undefined
+    && !options.fullDiagnosticCoverage
+    ? orderAntennasByTargetDistance(antennas, building.extent)
+    : [...antennas];
+  let processedAntennaCount = 0;
 
-    for (const antenna of antennas) {
+  for (const antenna of orderedAntennas) {
+    throwIfAborted(options.signal);
+
+    for (const [edgeIndex, edge] of building.edges.entries()) {
+      const existingIntervals = edgeIntervals[edgeIndex];
+      if (existingIntervals === undefined || isEntireEdgeVisible(existingIntervals)) continue;
+
       const antennaIntervals = computeVisibleIntervalsForEdge(
         dataset,
         edge,
         antenna.evaluatedCoordinate,
+        options.signal,
       );
-      visibleIntervals = unionParameterIntervals(visibleIntervals, antennaIntervals);
-      if (isEntireEdgeVisible(visibleIntervals)) break;
+      edgeIntervals[edgeIndex] = unionParameterIntervals(existingIntervals, antennaIntervals);
     }
+    processedAntennaCount += 1;
 
-    return {
-      edge,
-      visibleIntervals,
-      visibleLengthMeters: intervalMeasure(visibleIntervals) * edge.lengthMeters,
-    };
-  });
-  const visibleLengthMeters = edges.reduce(
-    (total, edge) => total + edge.visibleLengthMeters,
-    0,
-  );
+    const visibleLengthMeters = calculateVisibleLength(building.edges, edgeIntervals);
+    if (
+      options.requiredVisibleLengthMeters !== undefined
+      && !options.fullDiagnosticCoverage
+      && visibleLengthMeters >= options.requiredVisibleLengthMeters
+    ) {
+      return createBuildingVisibility(
+        building,
+        edgeIntervals,
+        visibleLengthMeters,
+        processedAntennaCount < orderedAntennas.length ? "lower-bound" : "complete",
+        processedAntennaCount,
+      );
+    }
+  }
 
-  return {
+  return createBuildingVisibility(
     building,
-    edges,
-    visibleLengthMeters,
-    perimeterMeters: building.perimeterMeters,
-    coverage: visibleLengthMeters / building.perimeterMeters,
-  };
+    edgeIntervals,
+    calculateVisibleLength(building.edges, edgeIntervals),
+    "complete",
+    processedAntennaCount,
+  );
 }
 
 export function computeVisibleIntervalsForEdge(
   dataset: BuildingDataset,
   edge: BuildingEdge,
   antenna: Coordinate,
+  signal?: AbortSignal,
 ): ParameterInterval[] {
   const breakpoints = generateCriticalParametersForEdge(dataset, edge, antenna);
   const intervals: ParameterInterval[] = [];
 
   for (let index = 0; index < breakpoints.length - 1; index += 1) {
+    throwIfAborted(signal);
     const start = breakpoints[index];
     const end = breakpoints[index + 1];
     if (start === undefined || end === undefined || end - start <= PARAMETER_EPSILON) continue;
@@ -76,6 +96,72 @@ export function computeVisibleIntervalsForEdge(
   }
 
   return unionParameterIntervals([], intervals);
+}
+
+function createBuildingVisibility(
+  building: BuildingVisibility["building"],
+  edgeIntervals: readonly (readonly ParameterInterval[])[],
+  visibleLengthMeters: number,
+  coverageKind: BuildingVisibility["coverageKind"],
+  processedAntennaCount: number,
+): BuildingVisibility {
+  const edges = building.edges.map((edge, edgeIndex): EdgeVisibility => {
+    const visibleIntervals = edgeIntervals[edgeIndex] ?? [];
+    return {
+      edge,
+      visibleIntervals,
+      visibleLengthMeters: intervalMeasure(visibleIntervals) * edge.lengthMeters,
+    };
+  });
+
+  return {
+    building,
+    edges,
+    visibleLengthMeters,
+    perimeterMeters: building.perimeterMeters,
+    coverage: visibleLengthMeters / building.perimeterMeters,
+    coverageKind,
+    processedAntennaCount,
+  };
+}
+
+function calculateVisibleLength(
+  edges: readonly BuildingEdge[],
+  edgeIntervals: readonly (readonly ParameterInterval[])[],
+): number {
+  return edges.reduce(
+    (total, edge, edgeIndex) =>
+      total + intervalMeasure(edgeIntervals[edgeIndex] ?? []) * edge.lengthMeters,
+    0,
+  );
+}
+
+function orderAntennasByTargetDistance(
+  antennas: readonly ValidatedAntenna[],
+  extent: BuildingVisibility["building"]["extent"],
+): ValidatedAntenna[] {
+  return [...antennas].sort((left, right) => {
+    const distanceDifference = pointToExtentDistance(left.evaluatedCoordinate, extent)
+      - pointToExtentDistance(right.evaluatedCoordinate, extent);
+    return distanceDifference || left.inputIndex - right.inputIndex;
+  });
+}
+
+function pointToExtentDistance(
+  [x, y]: Coordinate,
+  extent: BuildingVisibility["building"]["extent"],
+): number {
+  const dx = Math.max(extent.xmin - x, 0, x - extent.xmax);
+  const dy = Math.max(extent.ymin - y, 0, y - extent.ymax);
+  return Math.hypot(dx, dy);
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw signal.reason instanceof Error
+      ? signal.reason
+      : new DOMException("Evaluation cancelled.", "AbortError");
+  }
 }
 
 export function isSightLineBlocked(

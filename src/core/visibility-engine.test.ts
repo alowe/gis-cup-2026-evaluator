@@ -36,6 +36,28 @@ describe("visibility engine", () => {
     expect(result.coverage).toBeCloseTo(1, 9);
   });
 
+  it("stops safely after reaching a required visible length", () => {
+    const dataset = datasetFromFeatures([square("target", 500000, 3700000, 1, 1)]);
+    const antennas = [
+      antenna([500000, 3700000], "target"),
+      antenna([500001, 3700001], "target", 2),
+    ];
+    const lowerBound = computeBuildingVisibility(dataset, "target", antennas, {
+      requiredVisibleLengthMeters: 2,
+    });
+    const complete = computeBuildingVisibility(dataset, "target", antennas, {
+      requiredVisibleLengthMeters: 2,
+      fullDiagnosticCoverage: true,
+    });
+
+    expect(lowerBound.coverageKind).toBe("lower-bound");
+    expect(lowerBound.processedAntennaCount).toBe(1);
+    expect(lowerBound.visibleLengthMeters).toBeCloseTo(2, 9);
+    expect(complete.coverageKind).toBe("complete");
+    expect(complete.processedAntennaCount).toBe(2);
+    expect(complete.visibleLengthMeters).toBeCloseTo(4, 9);
+  });
+
   it("creates continuous visible intervals around a partial obstacle shadow", () => {
     const dataset = shadowDataset();
     const target = dataset.buildingById.get("target");
