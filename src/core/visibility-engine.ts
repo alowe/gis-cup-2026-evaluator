@@ -56,20 +56,18 @@ export function computeBuildingVisibility(
       && !options.fullDiagnosticCoverage
       && visibleLengthMeters >= options.requiredVisibleLengthMeters
     ) {
-      return createBuildingVisibility(
+      return createBuildingVisibilityFromIntervals(
         building,
         edgeIntervals,
-        visibleLengthMeters,
         processedAntennaCount < orderedAntennas.length ? "lower-bound" : "complete",
         processedAntennaCount,
       );
     }
   }
 
-  return createBuildingVisibility(
+  return createBuildingVisibilityFromIntervals(
     building,
     edgeIntervals,
-    calculateVisibleLength(building.edges, edgeIntervals),
     "complete",
     processedAntennaCount,
   );
@@ -117,20 +115,18 @@ export async function computeBuildingVisibilityAsync(
       && !options.fullDiagnosticCoverage
       && visibleLengthMeters >= options.requiredVisibleLengthMeters
     ) {
-      return createBuildingVisibility(
+      return createBuildingVisibilityFromIntervals(
         building,
         edgeIntervals,
-        visibleLengthMeters,
         processedAntennaCount < orderedAntennas.length ? "lower-bound" : "complete",
         processedAntennaCount,
       );
     }
   }
 
-  return createBuildingVisibility(
+  return createBuildingVisibilityFromIntervals(
     building,
     edgeIntervals,
-    calculateVisibleLength(building.edges, edgeIntervals),
     "complete",
     processedAntennaCount,
   );
@@ -183,13 +179,13 @@ export function computeVisibleIntervalsForEdge(
   return unionParameterIntervals([], intervals);
 }
 
-function createBuildingVisibility(
+export function createBuildingVisibilityFromIntervals(
   building: BuildingVisibility["building"],
   edgeIntervals: readonly (readonly ParameterInterval[])[],
-  visibleLengthMeters: number,
   coverageKind: BuildingVisibility["coverageKind"],
   processedAntennaCount: number,
 ): BuildingVisibility {
+  const visibleLengthMeters = calculateVisibleLength(building.edges, edgeIntervals);
   const edges = building.edges.map((edge, edgeIndex): EdgeVisibility => {
     const visibleIntervals = edgeIntervals[edgeIndex] ?? [];
     return {

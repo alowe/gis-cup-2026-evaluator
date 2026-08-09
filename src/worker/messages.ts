@@ -53,6 +53,14 @@ export type EvaluatorWorkerResponse =
       readonly buildingId: string;
       readonly completedBuildingCount: number;
       readonly totalBuildingCount: number;
+    }
+  | {
+      readonly type: "evaluation-antenna-progress";
+      readonly requestId: number;
+      readonly subproblemIndex: number;
+      readonly completedAntennaCount: number;
+      readonly totalAntennaCount: number;
+      readonly remainingBuildingCount: number;
     };
 
 export interface DatasetSummary {

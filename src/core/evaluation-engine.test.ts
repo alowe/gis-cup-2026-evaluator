@@ -7,6 +7,7 @@ import {
 } from "./evaluation-engine.js";
 import { parseSolutionText } from "./solution-parser.js";
 import { validateSubproblemInput } from "./submission-validator.js";
+import { computeBuildingVisibility } from "./visibility-engine.js";
 
 describe("subproblem evaluation", () => {
   it("counts coverage exactly equal to tau as serviced", () => {
@@ -131,6 +132,39 @@ describe("subproblem evaluation", () => {
     expect(second.buildingResults[0]?.visibility).toBe(first.buildingResults[0]?.visibility);
     expect(visibilityCache.byConfiguration.size).toBe(1);
   });
+
+  it("matches legacy complete coverage for multiple antennas and obstacle shadows", () => {
+    const dataset = loadBuildingDataset({
+      type: "FeatureCollection",
+      crs: { type: "name", properties: { name: "EPSG:32611" } },
+      features: [
+        rectangleFeature("host", -1, -1, 1, 1),
+        rectangleFeature("obstacle", 4, -0.2, 2, 0.4),
+        rectangleFeature("target", 10, -1, 1, 2),
+      ],
+    });
+    const parsed = parseSolutionText("(0.1, 2)\n(0, 0), (0, -1)\nhost, obstacle, target");
+    const source = parsed.subproblems[0];
+    if (source === undefined) throw new Error("Expected subproblem.");
+    const validated = validateSubproblemInput(source, dataset);
+    const result = evaluateValidatedSubproblem(dataset, validated, {
+      fullDiagnosticCoverage: true,
+    });
+
+    for (const buildingResult of result.buildingResults) {
+      const legacy = computeBuildingVisibility(
+        dataset,
+        buildingResult.buildingId,
+        validated.uniqueAntennas,
+        { fullDiagnosticCoverage: true },
+      );
+      expect(buildingResult.coverage, buildingResult.buildingId).toBeCloseTo(
+        legacy.coverage,
+        8,
+      );
+      expect(buildingResult.coverageKind).toBe("complete");
+    }
+  });
 });
 
 function evaluate(dataset: ReturnType<typeof squareDataset>, solution: string) {
@@ -150,17 +184,27 @@ function squareDataset() {
 }
 
 function squareFeature(id: string, xmin: number): object {
+  return rectangleFeature(id, xmin, 3700000, 1, 1);
+}
+
+function rectangleFeature(
+  id: string,
+  xmin: number,
+  ymin: number,
+  width: number,
+  height: number,
+): object {
   return {
     type: "Feature",
     properties: { id },
     geometry: {
       type: "Polygon",
       coordinates: [[
-        [xmin, 3700000],
-        [xmin + 1, 3700000],
-        [xmin + 1, 3700001],
-        [xmin, 3700001],
-        [xmin, 3700000],
+        [xmin, ymin],
+        [xmin + width, ymin],
+        [xmin + width, ymin + height],
+        [xmin, ymin + height],
+        [xmin, ymin],
       ]],
     },
   };

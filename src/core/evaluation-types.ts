@@ -31,10 +31,18 @@ export interface EvaluationProgress {
   readonly totalBuildingCount: number;
 }
 
+export interface EvaluationAntennaProgress {
+  readonly subproblemIndex: number;
+  readonly completedAntennaCount: number;
+  readonly totalAntennaCount: number;
+  readonly remainingBuildingCount: number;
+}
+
 export interface EvaluationOptions extends EvaluationInstrumentation {
   readonly fullDiagnosticCoverage?: boolean;
   readonly signal?: AbortSignal;
   readonly onProgress?: (progress: EvaluationProgress) => void;
+  readonly onAntennaProgress?: (progress: EvaluationAntennaProgress) => void;
   readonly visibilityCache?: EvaluationVisibilityCache;
 }
 

@@ -6,8 +6,8 @@ import { expect, test } from "vitest";
 
 import { parseBuildingDatasetText } from "../src/core/dataset-loader.js";
 import type { PreparedBuilding } from "../src/core/dataset-types.js";
-import type { ValidatedAntenna } from "../src/core/submission-types.js";
-import { computeBuildingVisibility } from "../src/core/visibility-engine.js";
+import { computeRadialSweepVisibility } from "../src/core/radial-sweep.js";
+import { unionParameterIntervals } from "../src/core/visibility-engine.js";
 
 const DEFAULT_SAMPLE_PATH = "datasets/GIS-cup-sample-dataset.geojson";
 const DEFAULT_CLAIM_COUNT = 10;
@@ -28,24 +28,21 @@ test("reports sample dataset loading and visibility baselines", () => {
   if (host === undefined || host.vertices[0] === undefined) {
     throw new Error("The benchmark dataset contains no usable building.");
   }
-  const antenna: ValidatedAntenna = {
-    inputIndex: 0,
-    submittedCoordinate: host.vertices[0],
-    evaluatedCoordinate: host.vertices[0],
-    boundaryDistanceMeters: 0,
-    hostBuildingId: host.id,
-    snapped: false,
-  };
   const targets = nearestBuildings(dataset.buildings, host, claimCount);
-  const coverages: number[] = [];
+  const targetIndexes = new Set(targets.map((target) => target.inputIndex));
   const visibilityStarted = performance.now();
-  for (const target of targets) {
-    const visibility = computeBuildingVisibility(dataset, target.id, [antenna], {
-      requiredVisibleLengthMeters: target.perimeterMeters * 0.5,
-    });
-    coverages.push(visibility.coverage);
-  }
+  const swept = computeRadialSweepVisibility(dataset, host.vertices[0], targetIndexes);
   const visibilityMilliseconds = performance.now() - visibilityStarted;
+  const coverages = targets.map((target) => target.edges.reduce((visibleLength, edge) => {
+    const intervals = unionParameterIntervals(
+      [],
+      swept.get(target.inputIndex)?.get(edge.edgeIndex) ?? [],
+    );
+    return visibleLength + intervals.reduce(
+      (total, interval) => total + interval.end - interval.start,
+      0,
+    ) * edge.lengthMeters;
+  }, 0) / target.perimeterMeters);
 
   const result = {
     datasetPath,
@@ -57,8 +54,7 @@ test("reports sample dataset loading and visibility baselines", () => {
     loadMilliseconds: round(loadMilliseconds),
     heapGrowthMegabytes: round((heapAfterLoad - heapBefore) / 1024 / 1024),
     visibilityClaimCount: targets.length,
-    visibilityMilliseconds: round(visibilityMilliseconds),
-    averageVisibilityMilliseconds: round(visibilityMilliseconds / Math.max(1, targets.length)),
+    radialSweepMilliseconds: round(visibilityMilliseconds),
     firstBuildingId: targets[0]?.id,
     firstBuildingCoverage: coverages[0] === undefined ? undefined : round(coverages[0]),
   };

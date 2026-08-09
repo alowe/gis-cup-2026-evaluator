@@ -127,6 +127,10 @@ evaluatorWorker.addEventListener(
         if (event.data.requestId !== activeSolutionRequestId) return;
         status.textContent = `Configuration ${event.data.subproblemIndex}: evaluated ${event.data.completedBuildingCount}/${event.data.totalBuildingCount} claims · ${event.data.buildingId}`;
         break;
+      case "evaluation-antenna-progress":
+        if (event.data.requestId !== activeSolutionRequestId) return;
+        status.textContent = `Configuration ${event.data.subproblemIndex}: swept ${event.data.completedAntennaCount}/${event.data.totalAntennaCount} antennas · ${event.data.remainingBuildingCount} claim(s) still below threshold`;
+        break;
     }
   },
 );

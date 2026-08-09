@@ -128,6 +128,14 @@ async function loadSolution(
         fullDiagnosticCoverage,
         signal: controller.signal,
         visibilityCache,
+        onAntennaProgress: (progress) => {
+          const response: EvaluatorWorkerResponse = {
+            type: "evaluation-antenna-progress",
+            requestId,
+            ...progress,
+          };
+          worker.postMessage(response);
+        },
         onProgress: (progress) => {
           const response: EvaluatorWorkerResponse = {
             type: "evaluation-progress",
