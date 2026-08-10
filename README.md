@@ -62,7 +62,9 @@ pnpm lint
 pnpm build
 ```
 
-Dependencies are pinned in `package.json` and `pnpm-lock.yaml` to keep geometry behavior reproducible.
+Dependencies are pinned in `package.json` and `pnpm-lock.yaml` to keep geometry behavior reproducible. The evaluator and ArcGIS versions shown in the interface and JSON reports are derived from that package metadata.
+
+Pushes to `main` or `master` run the full validation suite and deploy the production build through GitHub Pages. The workflow derives the standard `/<repository-name>/` base path automatically; local development continues to use `/`.
 
 The main source directories are:
 

@@ -13,12 +13,14 @@ import { parseSolutionText } from "../core/solution-parser.js";
 import { buildEvaluationReport, type ReportInputMetadata } from "../core/report-builder.js";
 import { createMeterSpatialReference } from "../core/spatial-reference.js";
 import { validateSubproblemInput } from "../core/submission-validator.js";
+import { LatestRequestTracker } from "./latest-request.js";
 
 const worker = self as DedicatedWorkerGlobalScope;
 const spatialReference = createMeterSpatialReference(TEST_SPATIAL_REFERENCE_WKID);
 let activeDataset: BuildingDataset | undefined;
 let activeDatasetInput: ReportInputMetadata | undefined;
 let activeEvaluation: { readonly requestId: number; readonly controller: AbortController } | undefined;
+const datasetRequests = new LatestRequestTracker();
 
 worker.addEventListener("message", (event: MessageEvent<EvaluatorWorkerRequest>) => {
   switch (event.data.type) {
@@ -31,6 +33,7 @@ worker.addEventListener("message", (event: MessageEvent<EvaluatorWorkerRequest>)
       break;
     }
     case "load-dataset":
+      datasetRequests.begin(event.data.requestId);
       void loadDataset(event.data.requestId, event.data.file);
       break;
     case "load-solution":
@@ -55,9 +58,13 @@ async function loadDataset(requestId: number, file: File): Promise<void> {
 
   try {
     const bytes = await file.arrayBuffer();
+    if (!isLatestDatasetRequest(requestId)) return;
     const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     const sha256 = await sha256Hex(bytes);
-    activeDataset = parseBuildingDatasetText(text);
+    if (!isLatestDatasetRequest(requestId)) return;
+    const dataset = parseBuildingDatasetText(text);
+    if (!isLatestDatasetRequest(requestId)) return;
+    activeDataset = dataset;
     activeDatasetInput = { fileName: file.name, sha256 };
     const response: EvaluatorWorkerResponse = {
       type: "dataset-loaded",
@@ -74,6 +81,7 @@ async function loadDataset(requestId: number, file: File): Promise<void> {
     };
     worker.postMessage(response);
   } catch (error: unknown) {
+    if (!isLatestDatasetRequest(requestId)) return;
     const detail = error instanceof DatasetValidationError
       ? {
           code: error.code,
@@ -92,6 +100,10 @@ async function loadDataset(requestId: number, file: File): Promise<void> {
     };
     worker.postMessage(response);
   }
+}
+
+function isLatestDatasetRequest(requestId: number): boolean {
+  return datasetRequests.isLatest(requestId);
 }
 
 async function loadSolution(

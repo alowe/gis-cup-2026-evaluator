@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import packageMetadata from "../../package.json";
 import { loadBuildingDataset } from "./dataset-loader.js";
 import { evaluateValidatedSubproblem } from "./evaluation-engine.js";
 import { sha256Hex } from "./hash.js";
@@ -37,8 +38,8 @@ describe("evaluation report", () => {
 
     expect(report).toMatchObject({
       schemaVersion: "1.0",
-      evaluatorVersion: "0.1.0",
-      arcgisVersion: "5.1.0",
+      evaluatorVersion: packageMetadata.version,
+      arcgisVersion: packageMetadata.dependencies["@arcgis/core"],
       generatedAt: "2026-08-09T12:00:00.000Z",
       dataset: { sha256: "dataset-hash", buildingCount: 1 },
       solution: { sha256: "solution-hash" },

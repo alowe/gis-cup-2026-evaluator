@@ -1,10 +1,16 @@
 import "./style.css";
+import { EVALUATOR_VERSION } from "./core/constants.js";
 import type {
   EvaluatorWorkerRequest,
   EvaluatorWorkerResponse,
   SubproblemValidationSummary,
 } from "./worker/messages.js";
 import type { EvaluationReport } from "./core/report-types.js";
+import {
+  consumeSelectedFile,
+  nextItemBatch,
+  WARNING_BATCH_SIZE,
+} from "./ui-helpers.js";
 
 const app = document.querySelector<HTMLElement>("#app");
 
@@ -51,8 +57,11 @@ app.innerHTML = `
     </div>
     <div class="status" data-status>Starting geometry worker…</div>
     <div class="results" data-results hidden></div>
-    <footer class="esri-attribution">
-      Powered by <a href="https://www.esri.com/" target="_blank" rel="noopener noreferrer">Esri</a>
+    <footer class="app-footer">
+      <span class="evaluator-version">Evaluator version ${EVALUATOR_VERSION}</span>
+      <span class="esri-attribution">
+        Powered by <a href="https://www.esri.com/" target="_blank" rel="noopener noreferrer">Esri</a>
+      </span>
     </footer>
   </section>
 `;
@@ -151,7 +160,7 @@ let activeSolutionRequestId = 0;
 let latestReport: EvaluationReport | undefined;
 
 datasetInput.addEventListener("change", () => {
-  const file = datasetInput.files?.[0];
+  const file = consumeSelectedFile(datasetInput);
   if (file === undefined) return;
 
   activeDatasetRequestId += 1;
@@ -174,7 +183,7 @@ datasetInput.addEventListener("change", () => {
 });
 
 solutionInput.addEventListener("change", () => {
-  const file = solutionInput.files?.[0];
+  const file = consumeSelectedFile(solutionInput);
   if (file === undefined) return;
 
   activeSolutionRequestId += 1;
@@ -270,37 +279,76 @@ function renderWarningDetails(container: HTMLElement, report: EvaluationReport):
   const summary = document.createElement("summary");
   summary.textContent = `View ${warningCount} warning${warningCount === 1 ? "" : "s"}`;
   details.append(summary);
+  container.append(details);
 
+  let initialized = false;
+  details.addEventListener("toggle", () => {
+    if (!details.open || initialized) return;
+    initialized = true;
+    renderWarningBatches(details, report);
+  });
+}
+
+function renderWarningBatches(container: HTMLElement, report: EvaluationReport): void {
+  const entries = report.subproblems.flatMap((subproblem) =>
+    subproblem.warnings.map((warning) => ({
+      subproblemIndex: subproblem.index,
+      warning,
+    })));
   const warningList = document.createElement("div");
   warningList.className = "warning-list";
-  for (const subproblem of report.subproblems) {
-    if (subproblem.warnings.length === 0) continue;
+  const moreButton = document.createElement("button");
+  moreButton.type = "button";
+  moreButton.className = "warning-more";
+  let cursor = 0;
+  let currentSubproblemIndex: number | undefined;
+  let currentGroup: HTMLElement | undefined;
 
-    const group = document.createElement("section");
-    group.className = "warning-group";
-    const heading = document.createElement("h3");
-    heading.textContent = `Configuration ${subproblem.index}`;
-    group.append(heading);
+  const appendBatch = (): void => {
+    moreButton.remove();
+    const batch = nextItemBatch(entries, cursor);
+    cursor = batch.nextCursor;
+    for (const entry of batch.items) {
+      if (entry.subproblemIndex !== currentSubproblemIndex) {
+        currentSubproblemIndex = entry.subproblemIndex;
+        currentGroup = document.createElement("section");
+        currentGroup.className = "warning-group";
+        const heading = document.createElement("h3");
+        heading.textContent = `Configuration ${entry.subproblemIndex}`;
+        currentGroup.append(heading);
+        warningList.append(currentGroup);
+      }
 
-    for (const warning of subproblem.warnings) {
-      const item = document.createElement("article");
-      item.className = "warning-item";
-      const title = document.createElement("div");
-      title.className = "warning-code";
-      title.textContent = warningContext(warning);
-      const message = document.createElement("p");
-      message.textContent = warning.message;
-      const action = document.createElement("p");
-      action.className = "warning-action";
-      action.textContent = `Action: ${warning.action}`;
-      item.append(title, message, action);
-      group.append(item);
+      currentGroup?.append(createWarningItem(entry.warning));
     }
-    warningList.append(group);
-  }
 
-  details.append(warningList);
-  container.append(details);
+    if (batch.remaining > 0) {
+      const nextBatchSize = Math.min(WARNING_BATCH_SIZE, batch.remaining);
+      moreButton.textContent = `Show ${nextBatchSize} more (${batch.remaining} remaining)`;
+      warningList.append(moreButton);
+    }
+  };
+
+  moreButton.addEventListener("click", appendBatch);
+  container.append(warningList);
+  appendBatch();
+}
+
+function createWarningItem(
+  warning: EvaluationReport["subproblems"][number]["warnings"][number],
+): HTMLElement {
+  const item = document.createElement("article");
+  item.className = "warning-item";
+  const title = document.createElement("div");
+  title.className = "warning-code";
+  title.textContent = warningContext(warning);
+  const message = document.createElement("p");
+  message.textContent = warning.message;
+  const action = document.createElement("p");
+  action.className = "warning-action";
+  action.textContent = `Action: ${warning.action}`;
+  item.append(title, message, action);
+  return item;
 }
 
 function warningContext(warning: EvaluationReport["subproblems"][number]["warnings"][number]): string {
