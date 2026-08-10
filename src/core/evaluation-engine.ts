@@ -28,6 +28,7 @@ interface EvaluationState {
   readonly configurationCache?: Map<string, BuildingVisibility>;
   readonly pendingByBuildingIndex: Map<number, PendingBuilding>;
   readonly visibilityByBuildingId: Map<string, BuildingVisibility>;
+  readonly verifiedBuildingIds: Set<string>;
   readonly numericalFailures: Map<string, string>;
 }
 
@@ -52,12 +53,20 @@ export function evaluateValidatedSubproblem(
         new Set(state.pendingByBuildingIndex.keys()),
         options.signal,
       );
-      applyAntennaSweep(state, swept, antennaIndex + 1, antennas.length, options);
+      const verifiedClaimCount = applyAntennaSweep(
+        state,
+        swept,
+        antennaIndex + 1,
+        antennas.length,
+        options,
+      );
       options.onAntennaProgress?.({
         subproblemIndex: input.source.index,
         completedAntennaCount: antennaIndex + 1,
         totalAntennaCount: antennas.length,
         remainingBuildingCount: state.pendingByBuildingIndex.size,
+        verifiedClaimCount,
+        totalClaimCount: input.claims.reportedIds.length,
       });
     } catch (error: unknown) {
       if (isAbortError(error)) throw error;
@@ -92,12 +101,20 @@ export async function evaluateValidatedSubproblemAsync(
         new Set(state.pendingByBuildingIndex.keys()),
         options.signal,
       );
-      applyAntennaSweep(state, swept, antennaIndex + 1, antennas.length, options);
+      const verifiedClaimCount = applyAntennaSweep(
+        state,
+        swept,
+        antennaIndex + 1,
+        antennas.length,
+        options,
+      );
       options.onAntennaProgress?.({
         subproblemIndex: input.source.index,
         completedAntennaCount: antennaIndex + 1,
         totalAntennaCount: antennas.length,
         remainingBuildingCount: state.pendingByBuildingIndex.size,
+        verifiedClaimCount,
+        totalClaimCount: input.claims.reportedIds.length,
       });
     } catch (error: unknown) {
       if (isAbortError(error)) throw error;
@@ -135,6 +152,7 @@ function initializeEvaluationState(
   const configurationCache = getConfigurationCache(input, options);
   const pendingByBuildingIndex = new Map<number, PendingBuilding>();
   const visibilityByBuildingId = new Map<string, BuildingVisibility>();
+  const verifiedBuildingIds = new Set<string>();
   const numericalFailures = new Map<string, string>();
   const tau = input.source.tau;
   if (tau === undefined) throw new Error("Validated subproblem unexpectedly has no tau value.");
@@ -144,6 +162,9 @@ function initializeEvaluationState(
     const cached = configurationCache?.get(buildingId);
     if (cached !== undefined) {
       visibilityByBuildingId.set(buildingId, cached);
+      if (cached.visibleLengthMeters >= tau * cached.perimeterMeters) {
+        verifiedBuildingIds.add(buildingId);
+      }
       continue;
     }
     const building = dataset.buildingById.get(buildingId);
@@ -163,6 +184,7 @@ function initializeEvaluationState(
     configurationCache,
     pendingByBuildingIndex,
     visibilityByBuildingId,
+    verifiedBuildingIds,
     numericalFailures,
   };
 }
@@ -173,7 +195,7 @@ function applyAntennaSweep(
   processedAntennaCount: number,
   totalAntennaCount: number,
   options: EvaluationOptions,
-): void {
+): number {
   for (const [buildingIndex, pending] of [...state.pendingByBuildingIndex]) {
     const buildingSweep = swept.get(buildingIndex);
     if (buildingSweep !== undefined) {
@@ -191,15 +213,18 @@ function applyAntennaSweep(
       processedAntennaCount < totalAntennaCount ? "lower-bound" : "complete",
       processedAntennaCount,
     );
+    const verified = visibility.visibleLengthMeters >= pending.requiredVisibleLengthMeters;
+    if (verified) state.verifiedBuildingIds.add(pending.building.id);
     if (
       !options.fullDiagnosticCoverage
-      && visibility.visibleLengthMeters >= pending.requiredVisibleLengthMeters
+      && verified
     ) {
       state.visibilityByBuildingId.set(pending.building.id, visibility);
       state.configurationCache?.set(pending.building.id, visibility);
       state.pendingByBuildingIndex.delete(buildingIndex);
     }
   }
+  return state.verifiedBuildingIds.size;
 }
 
 function finalizePendingBuildings(state: EvaluationState, totalAntennaCount: number): void {

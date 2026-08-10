@@ -36,6 +36,8 @@ export interface EvaluationAntennaProgress {
   readonly completedAntennaCount: number;
   readonly totalAntennaCount: number;
   readonly remainingBuildingCount: number;
+  readonly verifiedClaimCount: number;
+  readonly totalClaimCount: number;
 }
 
 export interface EvaluationOptions extends EvaluationInstrumentation {

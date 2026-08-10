@@ -129,7 +129,7 @@ evaluatorWorker.addEventListener(
         break;
       case "evaluation-antenna-progress":
         if (event.data.requestId !== activeSolutionRequestId) return;
-        status.textContent = `Configuration ${event.data.subproblemIndex}: swept ${event.data.completedAntennaCount}/${event.data.totalAntennaCount} antennas · ${event.data.remainingBuildingCount} claim(s) still below threshold`;
+        status.textContent = `Configuration ${event.data.subproblemIndex}: Processed ${event.data.completedAntennaCount}/${event.data.totalAntennaCount} antennas · ${event.data.verifiedClaimCount}/${event.data.totalClaimCount} service claims verified`;
         break;
     }
   },
@@ -225,7 +225,7 @@ function renderSolutionSummary(
 
   const table = document.createElement("table");
   const header = document.createElement("thead");
-  header.innerHTML = "<tr><th>Configuration</th><th>τ</th><th>k</th><th>Antennas</th><th>Claims</th><th>Score</th><th>Warnings</th></tr>";
+  header.innerHTML = "<tr><th>Configuration</th><th>τ</th><th>k</th><th>Antennas</th><th>Claims</th><th>Service score</th><th>Warnings</th></tr>";
   table.append(header);
 
   const body = document.createElement("tbody");

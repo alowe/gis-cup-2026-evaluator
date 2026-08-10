@@ -29,6 +29,24 @@ describe("subproblem evaluation", () => {
     expect(result.warnings.map((warning) => warning.code)).toContain("CLAIM_BELOW_THRESHOLD");
   });
 
+  it("reports verified and total service claims after each antenna", () => {
+    const dataset = squareDataset();
+    const parsed = parseSolutionText("(0.5, 1)\n(500000, 3700000)\ntarget, missing");
+    const source = parsed.subproblems[0];
+    if (source === undefined) throw new Error("Expected subproblem.");
+    const validated = validateSubproblemInput(source, dataset);
+    const progress: Array<{ verified: number; total: number }> = [];
+
+    evaluateValidatedSubproblem(dataset, validated, {
+      onAntennaProgress: (event) => progress.push({
+        verified: event.verifiedClaimCount,
+        total: event.totalClaimCount,
+      }),
+    });
+
+    expect(progress).toEqual([{ verified: 1, total: 2 }]);
+  });
+
   it("does not evaluate unclaimed or unknown buildings", () => {
     const dataset = loadBuildingDataset({
       type: "FeatureCollection",
