@@ -10,6 +10,7 @@ import { parseSolutionText } from "../src/core/solution-parser.js";
 import { validateSubproblemInput } from "../src/core/submission-validator.js";
 
 const DEFAULT_SAMPLE_PATH = "datasets/GIS-cup-sample-dataset.geojson";
+const GENERATED_SUBMISSION_PATH = "datasets/GIS-cup-sample-submission-50-antennas.txt";
 const ANTENNA_COUNT = 50;
 
 test("evaluates all sample buildings with 50 antennas", async () => {
@@ -51,6 +52,7 @@ test("evaluates all sample buildings with 50 antennas", async () => {
     averageMillisecondsPerAntenna: round(evaluationMilliseconds / ANTENNA_COUNT),
     evaluationHeapGrowthMegabytes: round((heapAfter - heapBefore) / 1024 / 1024),
   };
+  const generatedSubmission = `(0.5, ${ANTENNA_COUNT})\n${antennaLine}\n${result.verifiedBuildingIds.join(", ")}`;
 
   console.log(`\nSAMPLE_STRESS_BENCHMARK ${JSON.stringify(benchmark, null, 2)}`);
   expect(validated.uniqueAntennas).toHaveLength(ANTENNA_COUNT);
@@ -58,6 +60,9 @@ test("evaluates all sample buildings with 50 antennas", async () => {
   expect(completedAntennaCount).toBe(ANTENNA_COUNT);
   expect(result.buildingResults).toHaveLength(dataset.buildings.length);
   expect(result.buildingResults.every((building) => building.coverageKind === "complete")).toBe(true);
+  if (process.env.SAMPLE_DATASET === undefined) {
+    expect(readFileSync(resolve(GENERATED_SUBMISSION_PATH), "utf8").trim()).toBe(generatedSubmission);
+  }
 });
 
 function evenlySpacedBuildings(buildingCount: number, count: number): number[] {

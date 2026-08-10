@@ -39,4 +39,4 @@ The sample benchmark loads `datasets/GIS-cup-sample-dataset.geojson` by default 
 
 The stress benchmark uses 50 deterministic boundary antennas distributed through the sample dataset, claims every building, and enables full diagnostic coverage so all 50 antenna sweeps run. It is intentionally separate as `pnpm benchmark:stress` because it takes much longer and can use substantially more memory than the normal test suite.
 
-Ready-to-load browser fixtures are under `datasets/ui-smoke`, with documented expected scores for passing, failing, snapping, duplicate, unknown-ID, truncation, and multi-configuration cases. `datasets/GIS-cup-sample-submission.txt` provides a quick submission for the larger committed sample dataset.
+Ready-to-load browser fixtures are under `datasets/ui-smoke`, with documented expected scores for passing, failing, snapping, duplicate, unknown-ID, truncation, and multi-configuration cases. `datasets/GIS-cup-sample-submission.txt` provides a quick submission for the larger committed sample dataset, while `datasets/GIS-cup-sample-submission-50-antennas.txt` contains the 50 stress-test antennas and its 140 verified claims at `tau=0.5`.
