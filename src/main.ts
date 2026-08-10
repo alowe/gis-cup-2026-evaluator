@@ -51,6 +51,9 @@ app.innerHTML = `
     </div>
     <div class="status" data-status>Starting geometry worker…</div>
     <div class="results" data-results hidden></div>
+    <footer class="esri-attribution">
+      Powered by <a href="https://www.esri.com/" target="_blank" rel="noopener noreferrer">Esri</a>
+    </footer>
   </section>
 `;
 

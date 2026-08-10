@@ -247,6 +247,21 @@ tbody tr:last-child td {
   font-size: 0.85rem;
 }
 
+.esri-attribution {
+  width: fit-content;
+  margin-top: 1.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.3rem;
+  background: rgb(255 255 255 / 65%);
+  color: #323232;
+  font-family: "Avenir Next W00", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 0.75rem;
+}
+
+.esri-attribution a {
+  color: inherit;
+}
+
 @media (max-width: 42rem) {
   .shell {
     width: min(100% - 2rem, 52rem);
