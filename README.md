@@ -1,6 +1,8 @@
 # Competition information
 
-On August 15th, 16:00 UTC the official competition dataset and parameters will be available at the following files
+**Note for submission:** EasyChair requires three unique keywords for submissions; there are no particular keywords you must use.
+
+On August 15th, 16:00 UTC the official competition dataset and parameters were made available at the following files
 
 ```text
 datasets/GIS-cup-competition-dataset.geojson
