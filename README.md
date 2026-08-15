@@ -1,3 +1,14 @@
+# Competition information
+
+On August 15th, 16:00 UTC the official competition dataset and parameters will be available at the following files
+
+```text
+datasets/GIS-cup-competition-dataset.geojson
+datasets/competition-parameters.txt
+```
+
+Full instructions can be found at the [SIGSPATIAL website.](https://sigspatial2026.sigspatial.org/giscup.html)
+
 # GIS Cup Evaluator
 
 Browser-based contestant self-checker for the SIGSPATIAL 2026 GIS Cup. It validates antenna placements, measures the visible perimeter of claimed buildings, and reports the resulting service score.
